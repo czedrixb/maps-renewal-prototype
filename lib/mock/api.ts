@@ -247,3 +247,96 @@ export async function getBooks() {
   await delay(200);
   return BOOKS;
 }
+
+// ─── Mutations (Sample C — first write path in the prototype) ──────────────────
+// These mutate the in-memory arrays directly so changes persist within a session.
+
+export async function toggleTopicStatus(
+  studentId: number,
+  topicId: number
+): Promise<void> {
+  await delay(150);
+  const plan = LEARNING_PLANS.find((p) => p.student_id === studentId);
+  if (!plan) return;
+  for (const block of plan.schedule) {
+    const topic = block.topics.find((t) => t.id === topicId);
+    if (topic) {
+      topic.status = topic.status === 'completed' ? 'pending' : 'completed';
+      return;
+    }
+  }
+}
+
+export async function setHomeworkStatus(
+  studentId: number,
+  topicId: number,
+  status: import('../types').HomeworkStatus
+): Promise<void> {
+  await delay(150);
+  const plan = LEARNING_PLANS.find((p) => p.student_id === studentId);
+  if (!plan) return;
+  for (const block of plan.schedule) {
+    const topic = block.topics.find((t) => t.id === topicId);
+    if (topic) {
+      topic.homework_status = status;
+      return;
+    }
+  }
+}
+
+export async function addMakeupSession(
+  input: Omit<import('../types').MakeupSession, 'id'>
+): Promise<import('../types').MakeupSession> {
+  await delay(200);
+  const newItem: import('../types').MakeupSession = {
+    ...input,
+    id: Math.max(0, ...MAKEUP_SESSIONS.map((m) => m.id)) + 1,
+  };
+  MAKEUP_SESSIONS.push(newItem);
+  return newItem;
+}
+
+export async function addTestScore(
+  input: Omit<import('../types').TestScore, 'id' | 'reviews'>
+): Promise<import('../types').TestScore> {
+  await delay(200);
+  const newItem: import('../types').TestScore = {
+    ...input,
+    id: Math.max(0, ...TEST_SCORES.map((s) => s.id)) + 1,
+    reviews: [],
+  };
+  TEST_SCORES.push(newItem);
+  return newItem;
+}
+
+export async function upsertAttitude(
+  input: Omit<import('../types').AttitudeEvaluation, 'id' | 'total' | 'grade'>
+): Promise<import('../types').AttitudeEvaluation> {
+  await delay(200);
+  const { getAttitudeGrade } = await import('../vp');
+  const total =
+    input.categories.participation +
+    input.categories.homework +
+    input.categories.attitude +
+    input.categories.effort +
+    input.categories.improvement;
+  const grade = getAttitudeGrade(total);
+  const existing = ATTITUDE_EVALUATIONS.findIndex(
+    (a) =>
+      a.student_id === input.student_id &&
+      a.year === input.year &&
+      a.month === input.month
+  );
+  if (existing >= 0) {
+    ATTITUDE_EVALUATIONS[existing] = { ...ATTITUDE_EVALUATIONS[existing], ...input, total, grade };
+    return ATTITUDE_EVALUATIONS[existing];
+  }
+  const newItem: import('../types').AttitudeEvaluation = {
+    ...input,
+    id: Math.max(0, ...ATTITUDE_EVALUATIONS.map((a) => a.id)) + 1,
+    total,
+    grade,
+  };
+  ATTITUDE_EVALUATIONS.push(newItem);
+  return newItem;
+}

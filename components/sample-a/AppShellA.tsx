@@ -10,6 +10,7 @@ import {
   Settings,
   Bell,
   ChevronRight,
+  LogOut,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useLanguage, LanguageToggle, TranslationKey } from '@/lib/i18n';
@@ -83,6 +84,13 @@ export function AppShellA({ children, breadcrumbs }: AppShellAProps) {
             className="w-10 h-10 rounded-xl flex items-center justify-center text-slate-400 hover:bg-slate-100 hover:text-slate-700 transition-colors"
           >
             <Settings className="w-[18px] h-[18px]" />
+          </Link>
+          <Link
+            href="/"
+            title={t('nav_back')}
+            className="w-10 h-10 rounded-xl flex items-center justify-center text-slate-400 hover:bg-slate-100 hover:text-slate-700 transition-colors"
+          >
+            <LogOut className="w-[18px] h-[18px]" />
           </Link>
           {/* Avatar */}
           <div className="w-8 h-8 mt-1 rounded-full bg-indigo-100 text-indigo-700 flex items-center justify-center text-xs font-bold">
