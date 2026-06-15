@@ -1,34 +1,46 @@
 'use client';
 
-import { useEffect, useState } from 'react';
-import { Search, X, BookOpen, BarChart2, Heart, ChevronRight, Phone } from 'lucide-react';
+import { useEffect, useState, useCallback } from 'react';
+import { Search, X, BookOpen, BarChart2, Heart, ChevronRight, Phone, Calendar } from 'lucide-react';
 
 import { AppShellB } from '@/components/sample-b/AppShellB';
 import { GroupBadge } from '@/components/shared/GroupBadge';
 import { VPProgressBar } from '@/components/shared/VPProgressBar';
-import { PlanStatusBadge } from '@/components/shared/StatusBadge';
-import { getStudents, getLearningPlans, getStudentProgress, getTestScores, getAttitudeEvaluations } from '@/lib/mock/api';
+import { PlanStatusBadge, MakeupStatusBadge } from '@/components/shared/StatusBadge';
+import { EditableTopicList } from '@/components/shared/EditableTopicList';
+import { QuickActionStrip } from '@/components/shared/QuickActionStrip';
+import {
+  getStudents, getLearningPlans, getStudentProgress,
+  getTestScores, getAttitudeEvaluations, getMakeupSessions,
+  toggleTopicStatus, setHomeworkStatus,
+} from '@/lib/mock/api';
 import { cn, formatDate } from '@/lib/utils';
 import { getGradeColor } from '@/lib/vp';
+import { HW_CYCLE, toggleTopicInSchedule, cycleHWInSchedule, recomputeFromSchedule } from '@/lib/progress';
 import { useLanguage } from '@/lib/i18n';
-import type { Student, LearningPlan } from '@/lib/types';
+import type { Student, LearningPlan, MonthlyBlock, HomeworkStatus, MakeupSession } from '@/lib/types';
 
 const GROUP_CODES = ['HN', 'AC', 'RS', 'ST'];
 
 export default function StudentsBPage() {
   const { lang, t } = useLanguage();
-  const [students, setStudents] = useState<Student[]>([]);
-  const [plans, setPlans] = useState<LearningPlan[]>([]);
-  const [search, setSearch] = useState('');
+
+  const [students, setStudents]   = useState<Student[]>([]);
+  const [plans, setPlans]         = useState<LearningPlan[]>([]);
+  const [search, setSearch]       = useState('');
   const [groupFilter, setGroupFilter] = useState('ALL');
-  const [selectedId, setSelectedId] = useState<number | null>(null);
-  const [detailData, setDetailData] = useState<{
+  const [selectedId, setSelectedId]   = useState<number | null>(null);
+  const [detailData, setDetailData]   = useState<{
     progress: Awaited<ReturnType<typeof getStudentProgress>>;
-    scores: Awaited<ReturnType<typeof getTestScores>>;
+    scores:   Awaited<ReturnType<typeof getTestScores>>;
     attitudes: Awaited<ReturnType<typeof getAttitudeEvaluations>>;
+    makeups:  MakeupSession[];
   } | null>(null);
   const [detailLoading, setDetailLoading] = useState(false);
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading]             = useState(true);
+
+  // Local schedule for optimistic topic edits
+  const [localSchedule, setLocalSchedule] = useState<MonthlyBlock[]>([]);
 
   useEffect(() => {
     Promise.all([getStudents(), getLearningPlans()]).then(([s, p]) => {
@@ -39,30 +51,87 @@ export default function StudentsBPage() {
   }, []);
 
   const handleSelectStudent = async (id: number) => {
-    if (selectedId === id) { setSelectedId(null); setDetailData(null); return; }
+    if (selectedId === id) {
+      setSelectedId(null);
+      setDetailData(null);
+      setLocalSchedule([]);
+      return;
+    }
     setSelectedId(id);
     setDetailLoading(true);
-    const [progress, scores, attitudes] = await Promise.all([
+    // Seed local schedule from the active plan before async loads
+    const activePlan = plans.find((p) => p.student_id === id && (p.status === 'active' || p.status === 'approved'));
+    setLocalSchedule(activePlan?.schedule ? JSON.parse(JSON.stringify(activePlan.schedule)) : []);
+    const [progress, scores, attitudes, makeups] = await Promise.all([
       getStudentProgress(id),
       getTestScores({ student_id: id }),
       getAttitudeEvaluations({ student_id: id }),
+      getMakeupSessions({ student_id: id }),
     ]);
-    setDetailData({ progress, scores, attitudes });
+    setDetailData({ progress, scores, attitudes, makeups });
     setDetailLoading(false);
   };
 
+  // ── Inline editing handlers ──────────────────────────────────────────────────
+
+  const handleToggleTopic = useCallback(async (topicId: number) => {
+    if (!selectedId) return;
+    const newSchedule = toggleTopicInSchedule(localSchedule, topicId);
+    const recomputed  = recomputeFromSchedule(newSchedule);
+    setLocalSchedule(newSchedule);
+    setDetailData((prev) => prev ? {
+      ...prev,
+      progress: prev.progress ? { ...prev.progress, ...recomputed } : prev.progress,
+    } : prev);
+    await toggleTopicStatus(selectedId, topicId);
+  }, [localSchedule, selectedId]);
+
+  const handleCycleHW = useCallback(async (topicId: number, current: HomeworkStatus) => {
+    if (!selectedId) return;
+    const nextStatus  = HW_CYCLE[(HW_CYCLE.indexOf(current) + 1) % HW_CYCLE.length];
+    const newSchedule = cycleHWInSchedule(localSchedule, topicId, nextStatus);
+    const recomputed  = recomputeFromSchedule(newSchedule);
+    setLocalSchedule(newSchedule);
+    setDetailData((prev) => prev ? {
+      ...prev,
+      progress: prev.progress ? { ...prev.progress, ...recomputed } : prev.progress,
+    } : prev);
+    await setHomeworkStatus(selectedId, topicId, nextStatus);
+  }, [localSchedule, selectedId]);
+
+  // ── Quick-action refetch ─────────────────────────────────────────────────────
+
+  const handleSaved = useCallback(async (kind: 'absent' | 'score' | 'attitude') => {
+    if (!selectedId) return;
+    if (kind === 'absent') {
+      const makeups = await getMakeupSessions({ student_id: selectedId });
+      setDetailData((prev) => prev ? { ...prev, makeups } : prev);
+    } else if (kind === 'score') {
+      const scores = await getTestScores({ student_id: selectedId });
+      setDetailData((prev) => prev ? { ...prev, scores } : prev);
+    } else {
+      const attitudes = await getAttitudeEvaluations({ student_id: selectedId });
+      setDetailData((prev) => prev ? { ...prev, attitudes } : prev);
+    }
+  }, [selectedId]);
+
+  // ─────────────────────────────────────────────────────────────────────────────
+
   const filtered = students.filter((s) => {
     const matchSearch = s.name.includes(search);
-    const matchGroup = groupFilter === 'ALL' || s.group === groupFilter;
+    const matchGroup  = groupFilter === 'ALL' || s.group === groupFilter;
     return matchSearch && matchGroup;
   });
 
   const selectedStudent = students.find((s) => s.id === selectedId);
-  const selectedPlan = selectedId ? plans.find((p) => p.student_id === selectedId && (p.status === 'active' || p.status === 'approved')) : null;
+  const selectedPlan    = selectedId
+    ? plans.find((p) => p.student_id === selectedId && (p.status === 'active' || p.status === 'approved'))
+    : null;
 
   return (
     <AppShellB breadcrumbs={[{ label: t('nav_studentsManage') }]}>
       <div className="flex h-full overflow-hidden">
+
         {/* Left panel: student list */}
         <div className={cn('flex flex-col bg-white border-r border-gray-200 transition-all duration-300', selectedId ? 'w-80' : 'flex-1')}>
           {/* Header + Filters */}
@@ -108,7 +177,7 @@ export default function StudentsBPage() {
               </div>
             ) : (
               filtered.map((student) => {
-                const plan = plans.find((p) => p.student_id === student.id && (p.status === 'active' || p.status === 'approved'));
+                const plan       = plans.find((p) => p.student_id === student.id && (p.status === 'active' || p.status === 'approved'));
                 const isSelected = selectedId === student.id;
 
                 return (
@@ -150,6 +219,7 @@ export default function StudentsBPage() {
               </div>
             ) : selectedStudent && (
               <div className="p-5 space-y-5">
+
                 {/* Student header */}
                 <div className="bg-white rounded-xl border border-gray-200 p-4">
                   <div className="flex items-start justify-between mb-3">
@@ -167,7 +237,10 @@ export default function StudentsBPage() {
                         </p>
                       </div>
                     </div>
-                    <button onClick={() => { setSelectedId(null); setDetailData(null); }} className="p-1.5 text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded-lg">
+                    <button
+                      onClick={() => { setSelectedId(null); setDetailData(null); setLocalSchedule([]); }}
+                      className="p-1.5 text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded-lg"
+                    >
                       <X className="w-4 h-4" />
                     </button>
                   </div>
@@ -179,7 +252,7 @@ export default function StudentsBPage() {
                   )}
                 </div>
 
-                {/* VP Progress */}
+                {/* VP Progress summary */}
                 {detailData?.progress && (
                   <div className="bg-white rounded-xl border border-gray-200 p-4">
                     <div className="flex items-center gap-2 mb-3">
@@ -204,6 +277,19 @@ export default function StudentsBPage() {
                         <span className="font-bold text-violet-600">{detailData.progress.svp_earned.toFixed(1)} VP</span>
                       </div>
                     </div>
+                  </div>
+                )}
+
+                {/* Editable topic list */}
+                {localSchedule.length > 0 && (
+                  <div className="bg-white rounded-xl border border-gray-200 p-4">
+                    <h3 className="text-sm font-semibold text-gray-700 mb-3">{t('cls_progressTitle')}</h3>
+                    <EditableTopicList
+                      schedule={localSchedule}
+                      accent="sky"
+                      onToggleTopic={handleToggleTopic}
+                      onCycleHW={handleCycleHW}
+                    />
                   </div>
                 )}
 
@@ -246,6 +332,38 @@ export default function StudentsBPage() {
                     <VPProgressBar vp={detailData.attitudes[0].total} max={100} size="sm" />
                   </div>
                 )}
+
+                {/* Makeup sessions */}
+                {detailData?.makeups && detailData.makeups.length > 0 && (
+                  <div className="bg-white rounded-xl border border-gray-200 p-4">
+                    <div className="flex items-center gap-2 mb-3">
+                      <Calendar className="w-4 h-4 text-sky-600" />
+                      <h3 className="text-sm font-semibold text-gray-700">{t('mk_title')}</h3>
+                    </div>
+                    <div className="space-y-2">
+                      {detailData.makeups.slice(0, 4).map((m) => (
+                        <div key={m.id} className="flex items-center gap-2 text-xs text-gray-600">
+                          <span>{t('mk_absent')}: <b>{m.absent_date}</b></span>
+                          {m.makeup_date && (
+                            <span>→ {t('mk_makeup')}: <b className="text-green-700">{m.makeup_date}</b></span>
+                          )}
+                          <MakeupStatusBadge status={m.status} />
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {/* Quick actions — all three */}
+                <div className="bg-white rounded-xl border border-gray-200 p-4">
+                  <QuickActionStrip
+                    studentId={selectedId}
+                    studentName={selectedStudent.name}
+                    accent="sky"
+                    onSaved={handleSaved}
+                  />
+                </div>
+
               </div>
             )}
           </div>

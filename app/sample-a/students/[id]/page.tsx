@@ -1,10 +1,10 @@
 'use client';
 
-import { useEffect, useState, use } from 'react';
+import { useEffect, useState, useCallback, use } from 'react';
 import Link from 'next/link';
 import {
   BookOpen, TrendingUp, BarChart2, Heart, Calendar, FileText,
-  CheckCircle2, Circle, Eye, EyeOff,
+  CheckCircle2, Eye, EyeOff,
 } from 'lucide-react';
 
 import { AppShellA } from '@/components/sample-a/AppShellA';
@@ -13,14 +13,18 @@ import { VPProgressBar, VPRing } from '@/components/shared/VPProgressBar';
 import { PlanStatusBadge, ReportStatusBadge, MakeupStatusBadge } from '@/components/shared/StatusBadge';
 import { ReportStatusStepper } from '@/components/shared/ReportStatusStepper';
 import { MonthlyScheduleBoard } from '@/components/shared/MonthlyScheduleBoard';
+import { EditableTopicList } from '@/components/shared/EditableTopicList';
+import { QuickActionStrip } from '@/components/shared/QuickActionStrip';
 import {
   getStudent, getLearningPlans, getStudentProgress,
   getTestScores, getAttitudeEvaluations, getMakeupSessions, getMonthlyReports,
+  toggleTopicStatus, setHomeworkStatus,
 } from '@/lib/mock/api';
 import { cn, formatDate, formatYearMonth } from '@/lib/utils';
 import { getMonthLabel, getGradeColor } from '@/lib/vp';
+import { HW_CYCLE, toggleTopicInSchedule, cycleHWInSchedule, recomputeFromSchedule } from '@/lib/progress';
 import { useLanguage, TranslationKey } from '@/lib/i18n';
-import type { Student, LearningPlan, MonthlyBlock, MonthlyReport } from '@/lib/types';
+import type { Student, LearningPlan, MonthlyBlock, MonthlyReport, HomeworkStatus } from '@/lib/types';
 
 type TabId = 'overview' | 'plan' | 'progress' | 'scores' | 'attitude' | 'makeup' | 'report';
 
@@ -34,19 +38,12 @@ const TABS: { id: TabId; key: TranslationKey; icon: React.ElementType }[] = [
   { id: 'report',    key: 'tab_report',    icon: FileText },
 ];
 
-const HW_KEYS: Record<string, TranslationKey> = {
-  not_assigned: 'hw_not_assigned',
-  assigned: 'hw_assigned',
-  submitted: 'hw_submitted',
-  reverse_questions_completed: 'hw_reverse',
-};
-
 const AC_KEYS: Record<string, TranslationKey> = {
   participation: 'ac_participation',
-  homework: 'ac_homework',
-  attitude: 'ac_attitude',
-  effort: 'ac_effort',
-  improvement: 'ac_improvement',
+  homework:      'ac_homework',
+  attitude:      'ac_attitude',
+  effort:        'ac_effort',
+  improvement:   'ac_improvement',
 };
 
 export default function StudentWorkspacePage({ params }: { params: Promise<{ id: string }> }) {
@@ -55,16 +52,16 @@ export default function StudentWorkspacePage({ params }: { params: Promise<{ id:
   const { lang, t } = useLanguage();
 
   const [activeTab, setActiveTab] = useState<TabId>('overview');
-  const [student, setStudent] = useState<Student | null>(null);
-  const [plans, setPlans] = useState<LearningPlan[]>([]);
-  const [progress, setProgress] = useState<Awaited<ReturnType<typeof getStudentProgress>>>(null);
-  const [scores, setScores] = useState<Awaited<ReturnType<typeof getTestScores>>>([]);
+  const [student, setStudent]     = useState<Student | null>(null);
+  const [plans, setPlans]         = useState<LearningPlan[]>([]);
+  const [progress, setProgress]   = useState<Awaited<ReturnType<typeof getStudentProgress>>>(null);
+  const [scores, setScores]       = useState<Awaited<ReturnType<typeof getTestScores>>>([]);
   const [attitudes, setAttitudes] = useState<Awaited<ReturnType<typeof getAttitudeEvaluations>>>([]);
-  const [makeup, setMakeup] = useState<Awaited<ReturnType<typeof getMakeupSessions>>>([]);
-  const [reports, setReports] = useState<MonthlyReport[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [schedule, setSchedule] = useState<MonthlyBlock[]>([]);
-  const [hideVP, setHideVP] = useState(false);
+  const [makeup, setMakeup]       = useState<Awaited<ReturnType<typeof getMakeupSessions>>>([]);
+  const [reports, setReports]     = useState<MonthlyReport[]>([]);
+  const [loading, setLoading]     = useState(true);
+  const [schedule, setSchedule]   = useState<MonthlyBlock[]>([]);
+  const [hideVP, setHideVP]       = useState(false);
 
   useEffect(() => {
     Promise.all([
@@ -89,6 +86,41 @@ export default function StudentWorkspacePage({ params }: { params: Promise<{ id:
     });
   }, [studentId]);
 
+  // ── Inline editing handlers ────────────────────────────────────────────────
+
+  const handleToggleTopic = useCallback(async (topicId: number) => {
+    const newSchedule = toggleTopicInSchedule(schedule, topicId);
+    const recomputed  = recomputeFromSchedule(newSchedule);
+    setSchedule(newSchedule);
+    setProgress((prev) => prev ? { ...prev, ...recomputed } : prev);
+    await toggleTopicStatus(studentId, topicId);
+  }, [schedule, studentId]);
+
+  const handleCycleHW = useCallback(async (topicId: number, current: HomeworkStatus) => {
+    const nextStatus  = HW_CYCLE[(HW_CYCLE.indexOf(current) + 1) % HW_CYCLE.length];
+    const newSchedule = cycleHWInSchedule(schedule, topicId, nextStatus);
+    const recomputed  = recomputeFromSchedule(newSchedule);
+    setSchedule(newSchedule);
+    setProgress((prev) => prev ? { ...prev, ...recomputed } : prev);
+    await setHomeworkStatus(studentId, topicId, nextStatus);
+  }, [schedule, studentId]);
+
+  // ── Quick-action refetch helpers ──────────────────────────────────────────
+
+  const handleSavedScore = useCallback(async () => {
+    setScores(await getTestScores({ student_id: studentId }));
+  }, [studentId]);
+
+  const handleSavedAttitude = useCallback(async () => {
+    setAttitudes(await getAttitudeEvaluations({ student_id: studentId }));
+  }, [studentId]);
+
+  const handleSavedMakeup = useCallback(async () => {
+    setMakeup(await getMakeupSessions({ student_id: studentId }));
+  }, [studentId]);
+
+  // ─────────────────────────────────────────────────────────────────────────
+
   if (loading || !student) {
     return (
       <AppShellA breadcrumbs={[{ label: t('nav_students'), href: '/sample-a/students' }, { label: '...' }]}>
@@ -99,8 +131,8 @@ export default function StudentWorkspacePage({ params }: { params: Promise<{ id:
     );
   }
 
-  const activePlan = plans.find((p) => p.status === 'active' || p.status === 'approved');
-  const latestAttitude = attitudes[0];
+  const activePlan      = plans.find((p) => p.status === 'active' || p.status === 'approved');
+  const latestAttitude  = attitudes[0];
 
   return (
     <AppShellA breadcrumbs={[{ label: t('nav_students'), href: '/sample-a/students' }, { label: student.name }]}>
@@ -161,6 +193,7 @@ export default function StudentWorkspacePage({ params }: { params: Promise<{ id:
         {/* Tab Content */}
         <div className="flex-1 overflow-y-auto bg-slate-50">
           <div className="p-6 max-w-5xl mx-auto">
+
             {/* ─── OVERVIEW ─── */}
             {activeTab === 'overview' && (
               <div className="grid grid-cols-2 gap-4">
@@ -260,61 +293,37 @@ export default function StudentWorkspacePage({ params }: { params: Promise<{ id:
               </div>
             )}
 
-            {/* ─── PROGRESS ─── */}
+            {/* ─── PROGRESS (inline editable) ─── */}
             {activeTab === 'progress' && (
               <div>
                 <h3 className="text-sm font-semibold text-slate-700 mb-4">{t('pr_title')}</h3>
-                {progress?.schedule.map((block) => (
-                  <div key={block.month} className="mb-4">
-                    <div className="flex items-center justify-between mb-2">
-                      <h4 className="text-xs font-semibold text-slate-600">{getMonthLabel(block.month, lang)}</h4>
-                      <VPProgressBar
-                        vp={block.topics.filter((tp) => tp.status === 'completed').reduce((s, tp) => s + tp.vp_allocation, 0)}
-                        max={block.topics.reduce((s, tp) => s + tp.vp_allocation, 0)}
-                        size="sm"
-                        className="w-24"
-                      />
-                    </div>
-                    <div className="space-y-1.5">
-                      {block.topics.map((topic) => (
-                        <div
-                          key={topic.id}
-                          className={cn(
-                            'flex items-center gap-3 px-3 py-2.5 rounded-xl border text-sm',
-                            topic.status === 'completed'
-                              ? 'bg-slate-50 border-slate-200'
-                              : 'bg-white border-slate-200'
-                          )}
-                        >
-                          {topic.status === 'completed' ? (
-                            <CheckCircle2 className="w-4 h-4 text-green-500 shrink-0" />
-                          ) : (
-                            <Circle className="w-4 h-4 text-slate-300 shrink-0" />
-                          )}
-                          <span className={cn('flex-1 truncate', topic.status === 'completed' && 'text-slate-400 line-through')}>
-                            {topic.title}
-                          </span>
-                          <span className="text-xs text-slate-400 shrink-0">{topic.vp_allocation} VP</span>
-                          <span className={cn(
-                            'text-[10px] px-1.5 py-0.5 rounded font-semibold shrink-0',
-                            topic.homework_status === 'reverse_questions_completed'
-                              ? 'bg-violet-100 text-violet-700'
-                              : 'bg-slate-100 text-slate-500'
-                          )}>
-                            {t(HW_KEYS[topic.homework_status] ?? 'hw_not_assigned')}
-                          </span>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                ))}
-                {!progress && <p className="text-sm text-slate-400 text-center py-12">{t('pr_noData')}</p>}
+                {schedule.length > 0 ? (
+                  <EditableTopicList
+                    schedule={schedule}
+                    accent="indigo"
+                    onToggleTopic={handleToggleTopic}
+                    onCycleHW={handleCycleHW}
+                  />
+                ) : (
+                  <p className="text-sm text-slate-400 text-center py-12">{t('pr_noData')}</p>
+                )}
               </div>
             )}
 
             {/* ─── SCORES ─── */}
             {activeTab === 'scores' && (
               <div>
+                {/* Quick-add score form */}
+                <div className="bg-white rounded-2xl border border-slate-200 p-5 mb-4">
+                  <QuickActionStrip
+                    studentId={studentId}
+                    studentName={student.name}
+                    accent="indigo"
+                    actions={['score']}
+                    onSaved={handleSavedScore}
+                  />
+                </div>
+
                 <h3 className="text-sm font-semibold text-slate-700 mb-4">{t('sc_title')}</h3>
                 {scores.length > 0 ? (
                   <div className="space-y-3">
@@ -355,6 +364,17 @@ export default function StudentWorkspacePage({ params }: { params: Promise<{ id:
             {/* ─── ATTITUDE ─── */}
             {activeTab === 'attitude' && (
               <div>
+                {/* Quick-add attitude form */}
+                <div className="bg-white rounded-2xl border border-slate-200 p-5 mb-4">
+                  <QuickActionStrip
+                    studentId={studentId}
+                    studentName={student.name}
+                    accent="indigo"
+                    actions={['attitude']}
+                    onSaved={handleSavedAttitude}
+                  />
+                </div>
+
                 <h3 className="text-sm font-semibold text-slate-700 mb-4">{t('att_title')}</h3>
                 {attitudes.length > 0 ? (
                   <div className="space-y-4">
@@ -393,6 +413,17 @@ export default function StudentWorkspacePage({ params }: { params: Promise<{ id:
             {/* ─── MAKEUP ─── */}
             {activeTab === 'makeup' && (
               <div>
+                {/* Quick-add absence/makeup form */}
+                <div className="bg-white rounded-2xl border border-slate-200 p-5 mb-4">
+                  <QuickActionStrip
+                    studentId={studentId}
+                    studentName={student.name}
+                    accent="indigo"
+                    actions={['absent']}
+                    onSaved={handleSavedMakeup}
+                  />
+                </div>
+
                 <h3 className="text-sm font-semibold text-slate-700 mb-4">{t('mk_title')}</h3>
                 {makeup.length > 0 ? (
                   <div className="space-y-3">
@@ -451,12 +482,10 @@ export default function StudentWorkspacePage({ params }: { params: Promise<{ id:
                           </div>
                         </div>
 
-                        {/* Status stepper */}
                         <div className="mb-5">
                           <ReportStatusStepper status={report.status} />
                         </div>
 
-                        {/* Stats grid */}
                         <div className="grid grid-cols-4 gap-3 mb-4">
                           {!hideVP && (
                             <div className="text-center bg-slate-50 rounded-xl p-3">
@@ -480,7 +509,6 @@ export default function StudentWorkspacePage({ params }: { params: Promise<{ id:
                           </div>
                         </div>
 
-                        {/* Books progress */}
                         {report.books_progress.length > 0 && (
                           <div className="mb-3">
                             <p className="text-xs font-semibold text-slate-600 mb-2">{t('rep_booksProgress')}</p>
@@ -496,7 +524,6 @@ export default function StudentWorkspacePage({ params }: { params: Promise<{ id:
                           </div>
                         )}
 
-                        {/* Teacher comments */}
                         {report.teacher_comments && (
                           <div className="bg-indigo-50 rounded-xl p-3 mt-3">
                             <p className="text-xs font-semibold text-indigo-700 mb-1">{t('rep_teacherComment')}</p>
@@ -515,6 +542,7 @@ export default function StudentWorkspacePage({ params }: { params: Promise<{ id:
                 )}
               </div>
             )}
+
           </div>
         </div>
       </div>
