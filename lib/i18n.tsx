@@ -181,6 +181,8 @@ const T = {
     mon_booksProgress: '교재 진도',
     mon_teacherComment: '강사 코멘트',
     mon_publishedNote: '발행 완료 (스냅샷 고정)',
+    mon_typeUnit: '단원평가',
+    mon_typeSubunit: '소단원 평가',
 
     board_dragHere: '여기에 드래그',
     board_cont: '↳ 이어서',
@@ -464,6 +466,8 @@ const T = {
     mon_booksProgress: 'Books Progress',
     mon_teacherComment: 'Teacher Comments',
     mon_publishedNote: 'Published (snapshot locked)',
+    mon_typeUnit: 'Unit Test',
+    mon_typeSubunit: 'Sub-unit Test',
 
     board_dragHere: 'Drop here',
     board_cont: '↳ cont.',

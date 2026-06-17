@@ -16,6 +16,12 @@ import type { TestScore, MakeupSession, MonthlyReport } from '@/lib/types';
 
 type TabId = 'scores' | 'makeup' | 'reports';
 
+function translateTestType(type: string, t: (key: TranslationKey) => string): string {
+  if (type === '단원평가') return t('mon_typeUnit');
+  if (type === '소단원 평가') return t('mon_typeSubunit');
+  return type;
+}
+
 const TAB_KEYS: { id: TabId; key: TranslationKey }[] = [
   { id: 'scores',  key: 'mon_scores' },
   { id: 'makeup',  key: 'mon_makeup' },
@@ -119,7 +125,7 @@ function MonitoringContent() {
                         onClick={() => setTypeFilter(type)}
                         className={cn('px-2.5 py-1 rounded-lg text-xs font-semibold transition-colors', typeFilter === type ? 'bg-sky-600 text-white' : 'text-gray-500 hover:bg-gray-100')}
                       >
-                        {type}
+                        {translateTestType(type, t)}
                       </button>
                     ))}
                   </div>
@@ -158,7 +164,7 @@ function MonitoringContent() {
                           <span className="text-sm font-medium text-gray-800 truncate">{score.student_name}</span>
                         </div>
                         <span className="col-span-3 text-xs text-gray-600 truncate">{score.book_unit}</span>
-                        <span className="col-span-2 text-xs text-gray-500">{score.test_type}</span>
+                        <span className="col-span-2 text-xs text-gray-500">{translateTestType(score.test_type, t)}</span>
                         <div className="col-span-2">
                           <div className="flex items-center gap-2">
                             <span className="text-sm font-bold text-gray-800">{score.score}</span>

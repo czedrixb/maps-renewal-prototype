@@ -15,6 +15,12 @@ import type { TestScore, MakeupSession, MonthlyReport } from '@/lib/types';
 
 type TabId = 'scores' | 'makeup' | 'reports';
 
+function translateTestType(type: string, t: (key: TranslationKey) => string): string {
+  if (type === '단원평가') return t('mon_typeUnit');
+  if (type === '소단원 평가') return t('mon_typeSubunit');
+  return type;
+}
+
 const TABS: { id: TabId; key: TranslationKey; icon: React.ElementType }[] = [
   { id: 'scores',  key: 'mon_scores',  icon: BarChart2 },
   { id: 'makeup',  key: 'mon_makeup',  icon: Calendar },
@@ -109,7 +115,7 @@ export default function MonitoringAPage() {
                         onClick={() => setTypeFilter(type)}
                         className={`px-3 py-1 rounded-lg text-xs font-semibold transition-colors ${typeFilter === type ? 'bg-indigo-600 text-white' : 'text-slate-500 hover:bg-slate-100'}`}
                       >
-                        {type}
+                        {translateTestType(type, t)}
                       </button>
                     ))}
                   </div>
@@ -125,7 +131,7 @@ export default function MonitoringAPage() {
                         <div className="flex items-center gap-2 mb-1">
                           <span className="text-sm font-semibold text-slate-800">{score.student_name}</span>
                           <span className="text-xs text-slate-400">{score.book_unit}</span>
-                          <span className="text-xs text-slate-400">· {score.test_type}</span>
+                          <span className="text-xs text-slate-400">· {translateTestType(score.test_type, t)}</span>
                         </div>
                         <div className="flex items-center gap-2">
                           <VPProgressBar vp={score.score} max={score.total} size="sm" className="flex-1 max-w-[160px]" />
