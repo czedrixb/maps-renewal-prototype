@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import { BarChart2, Calendar, FileText, Search, TrendingUp } from 'lucide-react';
+import Link from 'next/link';
 import { AppShellA } from '@/components/sample-a/AppShellA';
 import { GroupBadge } from '@/components/shared/GroupBadge';
 import { ReportStatusBadge, MakeupStatusBadge } from '@/components/shared/StatusBadge';
@@ -27,6 +28,8 @@ export default function MonitoringAPage() {
   const [makeup, setMakeup] = useState<MakeupSession[]>([]);
   const [reports, setReports] = useState<MonthlyReport[]>([]);
   const [search, setSearch] = useState('');
+  const [typeFilter, setTypeFilter] = useState('ALL');
+  const [makeupStatus, setMakeupStatus] = useState('ALL');
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -50,7 +53,7 @@ export default function MonitoringAPage() {
           {TABS.map(({ id, key, icon: Icon }) => (
             <button
               key={id}
-              onClick={() => { setActiveTab(id); setSearch(''); }}
+              onClick={() => { setActiveTab(id); setSearch(''); setTypeFilter('ALL'); }}
               className={cn(
                 'flex items-center gap-2 px-5 py-2 rounded-xl text-sm font-semibold transition-all',
                 activeTab === id
@@ -91,10 +94,30 @@ export default function MonitoringAPage() {
                     {t('mon_total')} {scores.length}{lang === 'ko' ? '건의 시험 성적' : ' test scores'} · {t('mon_classAvg')} <span className="font-bold text-slate-700">82{lang === 'ko' ? '점' : ' pts'}</span>
                   </p>
                 </div>
+                {/* Test-type filter chips */}
+                {Array.from(new Set(scores.map((s) => s.test_type))).length > 0 && (
+                  <div className="flex items-center gap-1.5 bg-white border border-slate-200 rounded-xl p-1 w-fit">
+                    <button
+                      onClick={() => setTypeFilter('ALL')}
+                      className={`px-3 py-1 rounded-lg text-xs font-semibold transition-colors ${typeFilter === 'ALL' ? 'bg-indigo-600 text-white' : 'text-slate-500 hover:bg-slate-100'}`}
+                    >
+                      {t('stu_all')}
+                    </button>
+                    {Array.from(new Set(scores.map((s) => s.test_type))).map((type) => (
+                      <button
+                        key={type}
+                        onClick={() => setTypeFilter(type)}
+                        className={`px-3 py-1 rounded-lg text-xs font-semibold transition-colors ${typeFilter === type ? 'bg-indigo-600 text-white' : 'text-slate-500 hover:bg-slate-100'}`}
+                      >
+                        {type}
+                      </button>
+                    ))}
+                  </div>
+                )}
                 {scores
-                  .filter((s) => !search || s.student_name.includes(search))
+                  .filter((s) => (!search || s.student_name.includes(search)) && (typeFilter === 'ALL' || s.test_type === typeFilter))
                   .map((score) => (
-                    <div key={score.id} className="bg-white border border-slate-200 rounded-xl p-4 flex items-center gap-4">
+                    <Link key={score.id} href={`/sample-a/students/${score.student_id}`} className="bg-white border border-slate-200 rounded-xl p-4 flex items-center gap-4 hover:border-indigo-300 hover:shadow-sm transition-all block">
                       <div className="w-10 h-10 rounded-xl bg-indigo-50 text-indigo-700 flex items-center justify-center text-sm font-bold shrink-0">
                         {score.student_name[0]}
                       </div>
@@ -118,7 +141,7 @@ export default function MonitoringAPage() {
                         <span className="text-sm text-slate-400">/{score.total}</span>
                         <p className="text-xs text-slate-400 mt-0.5">{score.date}</p>
                       </div>
-                    </div>
+                    </Link>
                   ))}
               </div>
             )}
@@ -131,18 +154,26 @@ export default function MonitoringAPage() {
                     const count = makeup.filter((m) => m.status === status).length;
                     const colors: Record<string, string> = { pending: 'text-red-600', scheduled: 'text-amber-600', completed: 'text-green-600' };
                     const labelKeys: Record<string, TranslationKey> = { pending: 'ms_pending', scheduled: 'ms_scheduled', completed: 'ms_completed' };
+                    const isActive = makeupStatus === status;
                     return (
-                      <div key={status} className="bg-white border border-slate-200 rounded-xl p-3 text-center">
+                      <button
+                        key={status}
+                        onClick={() => setMakeupStatus(isActive ? 'ALL' : status)}
+                        className={cn(
+                          'bg-white border rounded-xl p-3 text-center transition-all',
+                          isActive ? 'border-indigo-400 ring-2 ring-indigo-400' : 'border-slate-200 hover:border-slate-300'
+                        )}
+                      >
                         <p className={cn('text-2xl font-black', colors[status])}>{count}</p>
                         <p className="text-xs text-slate-500 mt-0.5">{t(labelKeys[status])}</p>
-                      </div>
+                      </button>
                     );
                   })}
                 </div>
                 {makeup
-                  .filter((m) => !search || m.student_name.includes(search))
+                  .filter((m) => (!search || m.student_name.includes(search)) && (makeupStatus === 'ALL' || m.status === makeupStatus))
                   .map((m) => (
-                    <div key={m.id} className="bg-white border border-slate-200 rounded-xl p-4 flex items-center gap-4">
+                    <Link key={m.id} href={`/sample-a/students/${m.student_id}`} className="bg-white border border-slate-200 rounded-xl p-4 flex items-center gap-4 hover:border-indigo-300 hover:shadow-sm transition-all block">
                       <div className="w-10 h-10 rounded-xl bg-amber-50 text-amber-700 flex items-center justify-center text-sm font-bold shrink-0">
                         {m.student_name[0]}
                       </div>
@@ -156,7 +187,7 @@ export default function MonitoringAPage() {
                         {m.note && <p className="text-xs text-slate-400 italic mt-0.5">{m.note}</p>}
                       </div>
                       <MakeupStatusBadge status={m.status} />
-                    </div>
+                    </Link>
                   ))}
               </div>
             )}
@@ -172,7 +203,7 @@ export default function MonitoringAPage() {
                       report.status === 'published' ? 'border-blue-200 bg-blue-50/20' : 'border-slate-200'
                     )}>
                       <div className="flex items-center justify-between mb-3">
-                        <div className="flex items-center gap-3">
+                        <Link href={`/sample-a/students/${report.student_id}`} className="flex items-center gap-3 hover:opacity-80 transition-opacity">
                           <div className="w-9 h-9 rounded-xl bg-slate-100 text-slate-600 flex items-center justify-center text-sm font-bold shrink-0">
                             {report.student_name[0]}
                           </div>
@@ -183,7 +214,7 @@ export default function MonitoringAPage() {
                             </div>
                             <p className="text-xs text-slate-400">{formatYearMonth(report.year, report.month, lang)} · {report.report_code}</p>
                           </div>
-                        </div>
+                        </Link>
                         <ReportStatusBadge status={report.status} />
                       </div>
 

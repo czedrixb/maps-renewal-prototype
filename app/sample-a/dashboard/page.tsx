@@ -160,7 +160,7 @@ export default function DashboardAPage() {
                     </p>
                     <p className="text-xs text-slate-500 mt-0.5">{t('dash_startDate')}: {plan.start_date}</p>
                   </div>
-                  <Link href="/sample-a/learning-plans" className="text-xs font-semibold text-amber-700 hover:text-amber-800 shrink-0">
+                  <Link href={`/sample-a/learning-plans?student=${plan.student_id}`} className="text-xs font-semibold text-amber-700 hover:text-amber-800 shrink-0">
                     {t('dash_reviewLink')}
                   </Link>
                 </div>

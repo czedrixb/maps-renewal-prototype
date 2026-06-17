@@ -32,6 +32,8 @@ function MonitoringContent() {
   const [makeup, setMakeup] = useState<MakeupSession[]>([]);
   const [reports, setReports] = useState<MonthlyReport[]>([]);
   const [search, setSearch] = useState('');
+  const [typeFilter, setTypeFilter] = useState('ALL');
+  const [makeupStatus, setMakeupStatus] = useState('ALL');
   const [loading, setLoading] = useState(true);
   const [expandedReport, setExpandedReport] = useState<number | null>(null);
 
@@ -47,7 +49,18 @@ function MonitoringContent() {
   const setTab = (tab: TabId) => {
     router.push(`/sample-b/monitoring?tab=${tab}`);
     setSearch('');
+    setTypeFilter('ALL');
   };
+
+  // Derived stats for the scores summary bar — computed from loaded data (not hardcoded)
+  const PASS_RATIO = 0.8; // matches the VP "achieved" threshold in lib/vp.ts
+  const classAvg = scores.length
+    ? Math.round(scores.reduce((sum, s) => sum + (s.score / s.total) * 100, 0) / scores.length)
+    : 0;
+  const vpRate = scores.length
+    ? Math.round(scores.filter((s) => s.score / s.total >= PASS_RATIO).length / scores.length * 100)
+    : 0;
+  const retestPending = scores.filter((s) => s.reviews.length === 0 && s.score / s.total < PASS_RATIO).length;
 
   return (
     <AppShellB breadcrumbs={[{ label: t('mon_title') }]}>
@@ -90,16 +103,37 @@ function MonitoringContent() {
           <>
             {/* ─── SCORES ─── */}
             {tabParam === 'scores' && (
+              <div className="space-y-3">
+                {/* Test-type filter chips */}
+                {Array.from(new Set(scores.map((s) => s.test_type))).length > 0 && (
+                  <div className="flex items-center gap-1">
+                    <button
+                      onClick={() => setTypeFilter('ALL')}
+                      className={cn('px-2.5 py-1 rounded-lg text-xs font-semibold transition-colors', typeFilter === 'ALL' ? 'bg-sky-600 text-white' : 'text-gray-500 hover:bg-gray-100')}
+                    >
+                      {t('stu_all')}
+                    </button>
+                    {Array.from(new Set(scores.map((s) => s.test_type))).map((type) => (
+                      <button
+                        key={type}
+                        onClick={() => setTypeFilter(type)}
+                        className={cn('px-2.5 py-1 rounded-lg text-xs font-semibold transition-colors', typeFilter === type ? 'bg-sky-600 text-white' : 'text-gray-500 hover:bg-gray-100')}
+                      >
+                        {type}
+                      </button>
+                    ))}
+                  </div>
+                )}
               <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
                 {/* Summary bar */}
                 <div className="px-4 py-3 bg-gray-50 border-b border-gray-100 flex items-center gap-4">
                   <TrendingUp className="w-4 h-4 text-sky-600" />
                   <span className="text-xs text-gray-600">
-                    {t('mon_total')} <span className="font-bold">{scores.length}</span>{lang === 'ko' ? '건' : ''} · {t('mon_classAvg')} <span className="font-bold text-gray-800">82{lang === 'ko' ? '점' : ' pts'}</span>
+                    {t('mon_total')} <span className="font-bold">{scores.length}</span>{lang === 'ko' ? '건' : ''} · {t('mon_classAvg')} <span className="font-bold text-gray-800">{classAvg}{lang === 'ko' ? '점' : ' pts'}</span>
                   </span>
                   <div className="ml-auto flex items-center gap-3 text-xs text-gray-500">
-                    <span>{t('mon_vpRate')}: <span className="font-bold text-sky-700">82%</span></span>
-                    <span>{t('mon_retestPending')}: <span className="font-bold text-amber-600">2</span></span>
+                    <span>{t('mon_vpRate')}: <span className="font-bold text-sky-700">{vpRate}%</span></span>
+                    <span>{t('mon_retestPending')}: <span className="font-bold text-amber-600">{retestPending}</span></span>
                   </div>
                 </div>
 
@@ -116,9 +150,9 @@ function MonitoringContent() {
                 {/* Rows */}
                 <div className="divide-y divide-gray-50">
                   {scores
-                    .filter((s) => !search || s.student_name.includes(search))
+                    .filter((s) => (!search || s.student_name.includes(search)) && (typeFilter === 'ALL' || s.test_type === typeFilter))
                     .map((score) => (
-                      <div key={score.id} className="grid grid-cols-12 gap-2 px-4 py-3 items-center hover:bg-gray-50 transition-colors">
+                      <div key={score.id} onClick={() => router.push(`/sample-b/students?select=${score.student_id}`)} className="grid grid-cols-12 gap-2 px-4 py-3 items-center hover:bg-gray-50 transition-colors cursor-pointer">
                         <div className="col-span-3 flex items-center gap-2">
                           <div className="w-7 h-7 rounded-lg bg-sky-100 text-sky-700 flex items-center justify-center text-xs font-bold shrink-0">{score.student_name[0]}</div>
                           <span className="text-sm font-medium text-gray-800 truncate">{score.student_name}</span>
@@ -144,6 +178,7 @@ function MonitoringContent() {
                     ))}
                 </div>
               </div>
+            </div>
             )}
 
             {/* ─── MAKEUP ─── */}
@@ -152,16 +187,26 @@ function MonitoringContent() {
                 {/* Summary cards */}
                 <div className="grid grid-cols-4 gap-3">
                   {[
-                    { labelKey: 'mon_total' as const, value: makeup.length, color: 'text-gray-800' },
-                    { labelKey: 'ms_pending' as const, value: makeup.filter((m) => m.status === 'pending').length, color: 'text-red-600' },
-                    { labelKey: 'ms_scheduled' as const, value: makeup.filter((m) => m.status === 'scheduled').length, color: 'text-amber-600' },
-                    { labelKey: 'ms_completed' as const, value: makeup.filter((m) => m.status === 'completed').length, color: 'text-green-600' },
-                  ].map((c) => (
-                    <div key={c.labelKey} className="bg-white border border-gray-200 rounded-xl p-3 text-center">
-                      <p className={cn('text-2xl font-black', c.color)}>{c.value}</p>
-                      <p className="text-xs text-gray-500 mt-0.5">{t(c.labelKey)}</p>
-                    </div>
-                  ))}
+                    { labelKey: 'mon_total' as const,    value: makeup.length,                                             color: 'text-gray-800',  statusKey: 'ALL' as const },
+                    { labelKey: 'ms_pending' as const,   value: makeup.filter((m) => m.status === 'pending').length,   color: 'text-red-600',   statusKey: 'pending' as const },
+                    { labelKey: 'ms_scheduled' as const, value: makeup.filter((m) => m.status === 'scheduled').length, color: 'text-amber-600', statusKey: 'scheduled' as const },
+                    { labelKey: 'ms_completed' as const, value: makeup.filter((m) => m.status === 'completed').length, color: 'text-green-600', statusKey: 'completed' as const },
+                  ].map((c) => {
+                    const isActive = makeupStatus === c.statusKey;
+                    return (
+                      <button
+                        key={c.labelKey}
+                        onClick={() => setMakeupStatus(isActive && c.statusKey !== 'ALL' ? 'ALL' : c.statusKey)}
+                        className={cn(
+                          'bg-white border rounded-xl p-3 text-center transition-all',
+                          isActive && c.statusKey !== 'ALL' ? 'border-sky-400 ring-2 ring-sky-400' : 'border-gray-200 hover:border-gray-300'
+                        )}
+                      >
+                        <p className={cn('text-2xl font-black', c.color)}>{c.value}</p>
+                        <p className="text-xs text-gray-500 mt-0.5">{t(c.labelKey)}</p>
+                      </button>
+                    );
+                  })}
                 </div>
 
                 {/* Table */}
@@ -175,9 +220,9 @@ function MonitoringContent() {
                   </div>
                   <div className="divide-y divide-gray-50">
                     {makeup
-                      .filter((m) => !search || m.student_name.includes(search))
+                      .filter((m) => (!search || m.student_name.includes(search)) && (makeupStatus === 'ALL' || m.status === makeupStatus))
                       .map((m) => (
-                        <div key={m.id} className="grid grid-cols-12 gap-2 px-4 py-3 items-center hover:bg-gray-50 transition-colors">
+                        <div key={m.id} onClick={() => router.push(`/sample-b/students?select=${m.student_id}`)} className="grid grid-cols-12 gap-2 px-4 py-3 items-center hover:bg-gray-50 transition-colors cursor-pointer">
                           <div className="col-span-3 flex items-center gap-2">
                             <div className="w-7 h-7 rounded-lg bg-amber-100 text-amber-700 flex items-center justify-center text-xs font-bold">{m.student_name[0]}</div>
                             <span className="text-sm font-medium text-gray-800 truncate">{m.student_name}</span>
@@ -212,6 +257,7 @@ function MonitoringContent() {
                     .map((report) => (
                       <div key={report.id}>
                         <div
+                          onClick={() => setExpandedReport(expandedReport === report.id ? null : report.id)}
                           className={cn(
                             'grid grid-cols-12 gap-2 px-4 py-3 items-center cursor-pointer hover:bg-gray-50 transition-colors',
                             expandedReport === report.id && 'bg-sky-50'
@@ -232,7 +278,7 @@ function MonitoringContent() {
                           <span className="col-span-1 text-xs font-bold text-gray-700 text-center">{report.books_completion_percentage}%</span>
                           <div className="col-span-1 text-right">
                             <button
-                              onClick={() => setExpandedReport(expandedReport === report.id ? null : report.id)}
+                              onClick={(e) => { e.stopPropagation(); setExpandedReport(expandedReport === report.id ? null : report.id); }}
                               className="p-1 text-gray-400 hover:text-sky-600 rounded"
                             >
                               {expandedReport === report.id ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
@@ -268,12 +314,20 @@ function MonitoringContent() {
                               </div>
                             )}
 
-                            {report.status !== 'published' && (
-                              <div className="flex justify-end gap-2">
-                                {report.status === 'draft' && <button className="px-3 py-1.5 bg-sky-600 text-white rounded-lg text-xs font-semibold hover:bg-sky-700">{t('mon_requestReview')}</button>}
-                                {report.status === 'approved' && <button className="px-3 py-1.5 bg-blue-600 text-white rounded-lg text-xs font-semibold hover:bg-blue-700">{t('mon_publish')}</button>}
-                              </div>
-                            )}
+                            <div className="flex items-center justify-between gap-2">
+                              <button
+                                onClick={(e) => { e.stopPropagation(); router.push(`/sample-b/students?select=${report.student_id}`); }}
+                                className="px-3 py-1.5 border border-sky-300 text-sky-700 rounded-lg text-xs font-semibold hover:bg-sky-100 transition-colors"
+                              >
+                                {t('mon_student')} →
+                              </button>
+                              {report.status !== 'published' && (
+                                <div className="flex gap-2">
+                                  {report.status === 'draft' && <button className="px-3 py-1.5 bg-sky-600 text-white rounded-lg text-xs font-semibold hover:bg-sky-700">{t('mon_requestReview')}</button>}
+                                  {report.status === 'approved' && <button className="px-3 py-1.5 bg-blue-600 text-white rounded-lg text-xs font-semibold hover:bg-blue-700">{t('mon_publish')}</button>}
+                                </div>
+                              )}
+                            </div>
                             {report.status === 'published' && (
                               <p className="text-xs text-blue-500">📌 {report.published_at} {t('mon_publishedNote')}</p>
                             )}

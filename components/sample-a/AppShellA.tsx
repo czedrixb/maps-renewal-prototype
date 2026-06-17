@@ -7,13 +7,13 @@ import {
   Users,
   BookOpen,
   BarChart2,
-  Settings,
   Bell,
   ChevronRight,
   LogOut,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useLanguage, LanguageToggle, TranslationKey } from '@/lib/i18n';
+import { useProfile, initialOf } from '@/lib/profile';
 
 const NAV_ITEMS: { icon: React.ElementType; key: TranslationKey; href: string }[] = [
   { icon: LayoutDashboard, key: 'nav_dashboard',     href: '/sample-a/dashboard' },
@@ -30,6 +30,7 @@ interface AppShellAProps {
 export function AppShellA({ children, breadcrumbs }: AppShellAProps) {
   const pathname = usePathname();
   const { t } = useLanguage();
+  const { profile } = useProfile();
 
   return (
     <div className="flex h-screen bg-slate-50 overflow-hidden">
@@ -78,12 +79,16 @@ export function AppShellA({ children, breadcrumbs }: AppShellAProps) {
             <Bell className="w-[18px] h-[18px]" />
             <span className="absolute top-1.5 right-1.5 w-2 h-2 bg-red-500 rounded-full" />
           </button>
+          {/* Avatar — links to profile page */}
           <Link
-            href="#"
-            title={t('nav_settings')}
-            className="w-10 h-10 rounded-xl flex items-center justify-center text-slate-400 hover:bg-slate-100 hover:text-slate-700 transition-colors"
+            href="/sample-a/profile"
+            title={t('nav_profile')}
+            className="group relative w-8 h-8 mt-1 rounded-full bg-indigo-100 text-indigo-700 flex items-center justify-center text-xs font-bold hover:ring-2 hover:ring-indigo-300 transition-all"
           >
-            <Settings className="w-[18px] h-[18px]" />
+            {initialOf(profile.name)}
+            <span className="absolute left-full ml-2 px-2 py-1 bg-slate-800 text-white text-xs rounded-lg opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none whitespace-nowrap z-50 bottom-0">
+              {profile.name} · {profile.role} · {profile.academy}
+            </span>
           </Link>
           <Link
             href="/"
@@ -92,10 +97,6 @@ export function AppShellA({ children, breadcrumbs }: AppShellAProps) {
           >
             <LogOut className="w-[18px] h-[18px]" />
           </Link>
-          {/* Avatar */}
-          <div className="w-8 h-8 mt-1 rounded-full bg-indigo-100 text-indigo-700 flex items-center justify-center text-xs font-bold">
-            이
-          </div>
         </div>
       </nav>
 

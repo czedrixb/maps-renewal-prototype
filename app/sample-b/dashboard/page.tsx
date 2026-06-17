@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
+import { useRouter } from 'next/navigation';
 import { Users, TrendingUp, AlertCircle, Clock, ArrowRight, CheckCircle2 } from 'lucide-react';
 
 import { AppShellB } from '@/components/sample-b/AppShellB';
@@ -14,6 +15,7 @@ import type { Student, LearningPlan, MonthlyReport } from '@/lib/types';
 
 export default function DashboardBPage() {
   const { t } = useLanguage();
+  const router = useRouter();
   const [students, setStudents] = useState<Student[]>([]);
   const [plans, setPlans] = useState<LearningPlan[]>([]);
   const [reports, setReports] = useState<MonthlyReport[]>([]);
@@ -31,6 +33,19 @@ export default function DashboardBPage() {
   const pendingApprovals = plans.filter((p) => p.status === 'pending_approval');
   const pendingReports = reports.filter((r) => r.status === 'pending_review');
   const activeStudents = students.filter((s) => s.status === 'active');
+
+  // Average earned VP across students with an active plan (was hardcoded '6.2')
+  const activePlanVPs = students
+    .map((s) => plans.find((p) => p.student_id === s.id && p.status === 'active'))
+    .filter((p): p is LearningPlan => Boolean(p))
+    .map((plan) =>
+      plan.schedule.flatMap((b) => b.topics)
+        .filter((tp) => tp.status === 'completed')
+        .reduce((sum, tp) => sum + tp.vp_allocation, 0)
+    );
+  const vpAvg = activePlanVPs.length
+    ? (activePlanVPs.reduce((a, b) => a + b, 0) / activePlanVPs.length).toFixed(1)
+    : '0.0';
 
   if (loading) {
     return (
@@ -59,7 +74,7 @@ export default function DashboardBPage() {
             { labelKey: 'dash_totalStudents' as const, value: students.length, subKey: 'dash_activeCount' as const, subValue: activeStudents.length, icon: Users, color: 'text-sky-600', bg: 'bg-sky-50' },
             { labelKey: 'dash_activePlans' as const, value: plans.filter((p) => p.status === 'active').length, subKey: 'dash_activePlansSub' as const, subValue: null, icon: CheckCircle2, color: 'text-green-600', bg: 'bg-green-50' },
             { labelKey: 'dash_pendingApproval' as const, value: pendingApprovals.length, subKey: 'dash_pendingApprovalSub' as const, subValue: null, icon: Clock, color: 'text-amber-600', bg: 'bg-amber-50' },
-            { labelKey: 'dash_vpAvg' as const, value: '6.2', subKey: 'dash_vpTarget' as const, subValue: null, icon: TrendingUp, color: 'text-blue-600', bg: 'bg-blue-50' },
+            { labelKey: 'dash_vpAvg' as const, value: vpAvg, subKey: 'dash_vpTarget' as const, subValue: null, icon: TrendingUp, color: 'text-blue-600', bg: 'bg-blue-50' },
           ].map((stat) => {
             const Icon = stat.icon;
             const sub = stat.subValue !== null
@@ -104,7 +119,7 @@ export default function DashboardBPage() {
                   const earned = all.filter((tp) => tp.status === 'completed').reduce((sum, tp) => sum + tp.vp_allocation, 0);
                   const total = all.reduce((sum, tp) => sum + tp.vp_allocation, 0);
                   return (
-                    <tr key={s.id} className="hover:bg-gray-50 transition-colors cursor-pointer group">
+                    <tr key={s.id} onClick={() => router.push(`/sample-b/students?select=${s.id}`)} className="hover:bg-gray-50 transition-colors cursor-pointer group">
                       <td className="px-4 py-2.5">
                         <div className="flex items-center gap-2">
                           <div className="w-7 h-7 rounded-lg bg-sky-100 text-sky-700 flex items-center justify-center font-bold text-xs">{s.name[0]}</div>

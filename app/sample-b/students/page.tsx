@@ -1,6 +1,7 @@
 'use client';
 
-import { useEffect, useState, useCallback } from 'react';
+import { useEffect, useState, useCallback, Suspense } from 'react';
+import { useSearchParams } from 'next/navigation';
 import { Search, X, BookOpen, BarChart2, Heart, ChevronRight, Phone, Calendar } from 'lucide-react';
 
 import { AppShellB } from '@/components/sample-b/AppShellB';
@@ -17,18 +18,20 @@ import {
 import { cn, formatDate } from '@/lib/utils';
 import { getGradeColor } from '@/lib/vp';
 import { HW_CYCLE, toggleTopicInSchedule, cycleHWInSchedule, recomputeFromSchedule } from '@/lib/progress';
-import { useLanguage } from '@/lib/i18n';
+import { useLanguage, TranslationKey } from '@/lib/i18n';
 import type { Student, LearningPlan, MonthlyBlock, HomeworkStatus, MakeupSession } from '@/lib/types';
 
 const GROUP_CODES = ['HN', 'AC', 'RS', 'ST'];
 
-export default function StudentsBPage() {
+function StudentsBContent() {
   const { lang, t } = useLanguage();
+  const searchParams = useSearchParams();
 
   const [students, setStudents]   = useState<Student[]>([]);
   const [plans, setPlans]         = useState<LearningPlan[]>([]);
   const [search, setSearch]       = useState('');
   const [groupFilter, setGroupFilter] = useState('ALL');
+  const [statusFilter, setStatusFilter] = useState<'ALL' | 'active' | 'inactive' | 'graduated'>('ALL');
   const [selectedId, setSelectedId]   = useState<number | null>(null);
   const [detailData, setDetailData]   = useState<{
     progress: Awaited<ReturnType<typeof getStudentProgress>>;
@@ -43,12 +46,31 @@ export default function StudentsBPage() {
   const [localSchedule, setLocalSchedule] = useState<MonthlyBlock[]>([]);
 
   useEffect(() => {
+    const selectParam = searchParams.get('select');
     Promise.all([getStudents(), getLearningPlans()]).then(([s, p]) => {
       setStudents(s);
       setPlans(p);
       setLoading(false);
+
+      if (selectParam) {
+        const id = parseInt(selectParam, 10);
+        if (!s.find((st) => st.id === id)) return;
+        setSelectedId(id);
+        setDetailLoading(true);
+        const activePlan = p.find((pl) => pl.student_id === id && (pl.status === 'active' || pl.status === 'approved'));
+        setLocalSchedule(activePlan?.schedule ? JSON.parse(JSON.stringify(activePlan.schedule)) : []);
+        Promise.all([
+          getStudentProgress(id),
+          getTestScores({ student_id: id }),
+          getAttitudeEvaluations({ student_id: id }),
+          getMakeupSessions({ student_id: id }),
+        ]).then(([progress, scores, attitudes, makeups]) => {
+          setDetailData({ progress, scores, attitudes, makeups });
+          setDetailLoading(false);
+        });
+      }
     });
-  }, []);
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   const handleSelectStudent = async (id: number) => {
     if (selectedId === id) {
@@ -117,10 +139,18 @@ export default function StudentsBPage() {
 
   // ─────────────────────────────────────────────────────────────────────────────
 
+  const STATUS_FILTER_ITEMS: { value: 'ALL' | 'active' | 'inactive' | 'graduated'; labelKey: TranslationKey }[] = [
+    { value: 'ALL',       labelKey: 'stu_all' },
+    { value: 'active',    labelKey: 'sf_active' },
+    { value: 'inactive',  labelKey: 'sf_inactive' },
+    { value: 'graduated', labelKey: 'sf_graduated' },
+  ];
+
   const filtered = students.filter((s) => {
     const matchSearch = s.name.includes(search);
     const matchGroup  = groupFilter === 'ALL' || s.group === groupFilter;
-    return matchSearch && matchGroup;
+    const matchStatus = statusFilter === 'ALL' || s.status === statusFilter;
+    return matchSearch && matchGroup && matchStatus;
   });
 
   const selectedStudent = students.find((s) => s.id === selectedId);
@@ -164,6 +194,18 @@ export default function StudentsBPage() {
                   className={cn('px-2.5 py-1 rounded-lg text-xs font-semibold transition-colors', groupFilter === g ? 'bg-sky-600 text-white' : 'text-gray-500 hover:bg-gray-100')}
                 >
                   {g}
+                </button>
+              ))}
+            </div>
+            {/* Status filter */}
+            <div className="flex items-center gap-1 mt-1">
+              {STATUS_FILTER_ITEMS.map(({ value, labelKey }) => (
+                <button
+                  key={value}
+                  onClick={() => setStatusFilter(value)}
+                  className={cn('px-2.5 py-1 rounded-lg text-xs font-semibold transition-colors', statusFilter === value ? 'bg-sky-600 text-white' : 'text-gray-500 hover:bg-gray-100')}
+                >
+                  {t(labelKey)}
                 </button>
               ))}
             </div>
@@ -370,5 +412,13 @@ export default function StudentsBPage() {
         )}
       </div>
     </AppShellB>
+  );
+}
+
+export default function StudentsBPage() {
+  return (
+    <Suspense>
+      <StudentsBContent />
+    </Suspense>
   );
 }

@@ -1,7 +1,8 @@
 'use client';
 
-import { useEffect, useState } from 'react';
-import { Plus, BookOpen, Search, Trash2, GripVertical } from 'lucide-react';
+import { useEffect, useState, Suspense } from 'react';
+import { useSearchParams } from 'next/navigation';
+import { BookOpen, Search, Trash2, GripVertical } from 'lucide-react';
 import { AppShellA } from '@/components/sample-a/AppShellA';
 import { MonthlyScheduleBoard } from '@/components/shared/MonthlyScheduleBoard';
 import { GroupBadge } from '@/components/shared/GroupBadge';
@@ -10,7 +11,7 @@ import { VPProgressBar } from '@/components/shared/VPProgressBar';
 import { getStudents, getLearningPlans, schedulePlanning, getBooks } from '@/lib/mock/api';
 import { cn } from '@/lib/utils';
 import { useLanguage, TranslationKey } from '@/lib/i18n';
-import type { Student, LearningPlan, MonthlyBlock, Book, ManualModule, ManualModuleType } from '@/lib/types';
+import type { Student, LearningPlan, MonthlyBlock, Book, ManualModule, ManualModuleType, PlanStatus } from '@/lib/types';
 
 const MM_KEYS: Record<string, TranslationKey> = {
   school_exam: 'mm_school_exam',
@@ -21,12 +22,17 @@ const MM_KEYS: Record<string, TranslationKey> = {
 
 const MM_TYPES: ManualModuleType[] = ['school_exam', 'extra_book', 'exam_practice', 'review_book'];
 
-export default function LearningPlansAPage() {
+function LearningPlansAContent() {
   const { t } = useLanguage();
+  const searchParams = useSearchParams();
   const [students, setStudents] = useState<Student[]>([]);
   const [plans, setPlans] = useState<LearningPlan[]>([]);
   const [books, setBooks] = useState<Book[]>([]);
   const [loading, setLoading] = useState(true);
+
+  // List filter state
+  const [listSearch, setListSearch] = useState('');
+  const [listStatus, setListStatus] = useState<'ALL' | PlanStatus>('ALL');
 
   // Builder state
   const [selectedStudentId, setSelectedStudentId] = useState<number | null>(null);
@@ -38,13 +44,27 @@ export default function LearningPlansAPage() {
   const [newModule, setNewModule] = useState<ManualModule>({ title: '', source_type: 'school_exam', vp: 2, insert_after_topic_id: null });
 
   useEffect(() => {
+    const studentParam = searchParams.get('student');
     Promise.all([getStudents(), getLearningPlans(), getBooks()]).then(([s, p, b]) => {
       setStudents(s);
       setPlans(p);
       setBooks(b);
       setLoading(false);
+
+      if (studentParam) {
+        const studentId = parseInt(studentParam, 10);
+        const plan = p.find((pl) => pl.student_id === studentId);
+        if (plan) {
+          setSelectedStudentId(studentId);
+          setSchedule(plan.schedule);
+          setSelectedBookIds(plan.books.map((bk) => bk.id));
+          setStartDate(plan.start_date);
+        } else {
+          setSelectedStudentId(studentId);
+        }
+      }
     });
-  }, []);
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   const selectedStudent = students.find((s) => s.id === selectedStudentId);
   const existingPlan = selectedStudentId ? plans.find((p) => p.student_id === selectedStudentId && (p.status === 'active' || p.status === 'approved')) : null;
@@ -69,6 +89,21 @@ export default function LearningPlansAPage() {
     setSchedule([]);
   };
 
+  const PLAN_STATUS_FILTER: { value: 'ALL' | PlanStatus; labelKey: TranslationKey }[] = [
+    { value: 'ALL',             labelKey: 'stu_all' },
+    { value: 'draft',           labelKey: 'ps_draft' },
+    { value: 'pending_approval',labelKey: 'ps_pending' },
+    { value: 'approved',        labelKey: 'ps_approved' },
+    { value: 'active',          labelKey: 'ps_active' },
+    { value: 'completed',       labelKey: 'ps_completed' },
+    { value: 'rejected',        labelKey: 'ps_rejected' },
+  ];
+
+  const filteredPlans = plans.filter((p) =>
+    (listStatus === 'ALL' || p.status === listStatus) &&
+    p.student_name.includes(listSearch)
+  );
+
   return (
     <AppShellA breadcrumbs={[{ label: t('nav_learningPlans') }]}>
       <div className="flex h-full overflow-hidden">
@@ -77,15 +112,29 @@ export default function LearningPlansAPage() {
           <div className="p-4 border-b border-slate-100">
             <div className="flex items-center justify-between mb-3">
               <h2 className="text-sm font-semibold text-slate-700">{t('lp_planList')}</h2>
-              <span className="text-xs text-slate-400">{plans.length}{t('lp_countSuffix')}</span>
+              <span className="text-xs text-slate-400">{filteredPlans.length}{t('lp_countSuffix')}</span>
             </div>
             <div className="relative">
               <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-slate-400" />
-              <input type="text" placeholder={t('lp_search')} className="w-full pl-8 pr-3 py-1.5 text-xs border border-slate-200 rounded-lg focus:outline-none focus:ring-1 focus:ring-indigo-300" />
+              <input type="text" placeholder={t('lp_search')} value={listSearch} onChange={(e) => setListSearch(e.target.value)} className="w-full pl-8 pr-3 py-1.5 text-xs border border-slate-200 rounded-lg focus:outline-none focus:ring-1 focus:ring-indigo-300" />
+            </div>
+            {/* Status filter chips */}
+            <div className="flex flex-wrap gap-1 mt-2">
+              {PLAN_STATUS_FILTER.map(({ value, labelKey }) => (
+                <button
+                  key={value}
+                  onClick={() => setListStatus(value)}
+                  className={`px-2 py-0.5 rounded-md text-[10px] font-semibold transition-colors ${
+                    listStatus === value ? 'bg-indigo-600 text-white' : 'text-slate-500 bg-slate-100 hover:bg-slate-200'
+                  }`}
+                >
+                  {t(labelKey)}
+                </button>
+              ))}
             </div>
           </div>
           <div className="flex-1 overflow-y-auto p-2 space-y-1">
-            {plans.map((plan) => (
+            {filteredPlans.map((plan) => (
               <button
                 key={plan.id}
                 onClick={() => {
@@ -108,14 +157,6 @@ export default function LearningPlansAPage() {
                 <PlanStatusBadge status={plan.status} />
               </button>
             ))}
-          </div>
-          <div className="p-3 border-t border-slate-100">
-            <button
-              onClick={() => { setSelectedStudentId(null); setSchedule([]); setSelectedBookIds([]); }}
-              className="w-full flex items-center justify-center gap-2 py-2 rounded-xl bg-indigo-600 text-white text-xs font-semibold hover:bg-indigo-700 transition-colors"
-            >
-              <Plus className="w-3.5 h-3.5" />{t('lp_newPlan')}
-            </button>
           </div>
         </div>
 
@@ -218,7 +259,7 @@ export default function LearningPlansAPage() {
                     className="w-16 px-2 py-1.5 text-xs border border-slate-200 rounded-lg focus:outline-none text-center"
                   />
                   <button onClick={addManualModule} className="px-2.5 py-1.5 bg-violet-600 text-white text-xs font-semibold rounded-lg hover:bg-violet-700">
-                    <Plus className="w-3.5 h-3.5" />
+                    +
                   </button>
                 </div>
               </div>
@@ -261,5 +302,13 @@ export default function LearningPlansAPage() {
         </div>
       </div>
     </AppShellA>
+  );
+}
+
+export default function LearningPlansAPage() {
+  return (
+    <Suspense>
+      <LearningPlansAContent />
+    </Suspense>
   );
 }
