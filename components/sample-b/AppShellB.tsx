@@ -9,6 +9,7 @@ import {
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useLanguage, LanguageToggle, TranslationKey } from '@/lib/i18n';
+import { useProfile, initialOf } from '@/lib/profile';
 
 const NAV_SECTIONS: { titleKey?: TranslationKey; items: { icon: React.ElementType; key: TranslationKey; href: string }[] }[] = [
   {
@@ -77,6 +78,7 @@ interface AppShellBProps {
 
 export function AppShellB({ children, breadcrumbs }: AppShellBProps) {
   const { t } = useLanguage();
+  const { profile } = useProfile();
 
   return (
     <div className="flex h-screen bg-gray-50 overflow-hidden">
@@ -93,15 +95,6 @@ export function AppShellB({ children, breadcrumbs }: AppShellBProps) {
           </div>
         </div>
 
-        {/* User info */}
-        <div className="px-5 py-3 border-b border-slate-700 flex items-center gap-3">
-          <div className="w-8 h-8 rounded-full bg-sky-600 text-white flex items-center justify-center text-xs font-bold shrink-0">이</div>
-          <div className="min-w-0">
-            <p className="text-xs font-semibold text-slate-100 truncate">이지현 선생님</p>
-            <p className="text-[10px] text-slate-400">강사 · W아카데미</p>
-          </div>
-        </div>
-
         {/* Nav — wrapped in Suspense so useSearchParams is safe for static prerendering */}
         <Suspense fallback={<div className="flex-1" />}>
           <SidebarNav />
@@ -114,6 +107,20 @@ export function AppShellB({ children, breadcrumbs }: AppShellBProps) {
             {t('nav_notifications')}
             <span className="ml-auto bg-red-500 text-white text-[10px] w-4 h-4 rounded-full flex items-center justify-center font-bold">2</span>
           </button>
+          {/* User info — links to profile page */}
+          <Link
+            href="/sample-b/profile"
+            title={t('nav_profile')}
+            className="flex items-center gap-3 px-3 py-2 rounded-xl hover:bg-slate-700 transition-colors"
+          >
+            <div className="w-8 h-8 rounded-full bg-sky-600 text-white flex items-center justify-center text-xs font-bold shrink-0">
+              {initialOf(profile.name)}
+            </div>
+            <div className="min-w-0">
+              <p className="text-xs font-semibold text-slate-100 truncate">{profile.name}</p>
+              <p className="text-[10px] text-slate-400">{profile.role} · {profile.academy}</p>
+            </div>
+          </Link>
           <Link href="/" className="flex items-center gap-3 px-3 py-2 rounded-xl text-sm text-slate-400 hover:bg-slate-700 hover:text-slate-300">
             <LogOut className="w-4 h-4" />
             {t('nav_back')}

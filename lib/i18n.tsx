@@ -58,6 +58,9 @@ const T = {
     stu_noResults: '검색 결과가 없습니다.',
     stu_activeCount: '명 활성',
     stu_count: '명',
+    sf_active: '재원',
+    sf_inactive: '휴원',
+    sf_graduated: '졸업',
 
     tab_overview: '개요',
     tab_plan: '학습 플랜',
@@ -217,6 +220,13 @@ const T = {
     mm_exam_practice: '모의고사 대비',
     mm_review_book: '복습 교재',
 
+    nav_profile: '내 프로필',
+    prof_title: '프로필',
+    prof_subtitle: '이름, 역할, 소속을 수정할 수 있습니다.',
+    prof_name: '이름',
+    prof_role: '역할',
+    prof_academy: '소속 아카데미',
+
     nav_classroom: '수업 운영',
 
     cls_headerTitle: '수업 운영 현황',
@@ -331,6 +341,9 @@ const T = {
     stu_noResults: 'No results found.',
     stu_activeCount: ' active',
     stu_count: ' students',
+    sf_active: 'Active',
+    sf_inactive: 'Inactive',
+    sf_graduated: 'Graduated',
 
     tab_overview: 'Overview',
     tab_plan: 'Learning Plan',
@@ -489,6 +502,13 @@ const T = {
     mm_extra_book: 'Extra Book',
     mm_exam_practice: 'Mock Exam Prep',
     mm_review_book: 'Review Book',
+
+    nav_profile: 'My Profile',
+    prof_title: 'Profile',
+    prof_subtitle: 'Update your name, role, and academy.',
+    prof_name: 'Name',
+    prof_role: 'Role',
+    prof_academy: 'Academy',
 
     nav_classroom: 'Classroom',
 

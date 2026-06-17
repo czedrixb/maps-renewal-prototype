@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { BookOpen, Plus, ChevronDown, ChevronUp } from 'lucide-react';
+import { BookOpen, Plus, ChevronDown, ChevronUp, Search } from 'lucide-react';
 import { AppShellB } from '@/components/sample-b/AppShellB';
 import { MonthlyScheduleBoard } from '@/components/shared/MonthlyScheduleBoard';
 import { GroupBadge } from '@/components/shared/GroupBadge';
@@ -9,8 +9,8 @@ import { PlanStatusBadge } from '@/components/shared/StatusBadge';
 import { VPProgressBar } from '@/components/shared/VPProgressBar';
 import { getLearningPlans, schedulePlanning, getStudents, getBooks } from '@/lib/mock/api';
 import { cn } from '@/lib/utils';
-import { useLanguage } from '@/lib/i18n';
-import type { LearningPlan, MonthlyBlock, Student, Book } from '@/lib/types';
+import { useLanguage, TranslationKey } from '@/lib/i18n';
+import type { LearningPlan, MonthlyBlock, Student, Book, PlanStatus } from '@/lib/types';
 
 export default function LearningPlansBPage() {
   const { t } = useLanguage();
@@ -20,6 +20,10 @@ export default function LearningPlansBPage() {
   const [loading, setLoading] = useState(true);
   const [expandedPlanId, setExpandedPlanId] = useState<number | null>(null);
   const [expandedSchedule, setExpandedSchedule] = useState<MonthlyBlock[]>([]);
+
+  // List filter state
+  const [listSearch, setListSearch] = useState('');
+  const [listStatus, setListStatus] = useState<'ALL' | PlanStatus>('ALL');
 
   // New plan builder
   const [showBuilder, setShowBuilder] = useState(false);
@@ -56,8 +60,22 @@ export default function LearningPlansBPage() {
     setGenerating(false);
   };
 
+  const PLAN_STATUS_FILTER: { value: 'ALL' | PlanStatus; labelKey: TranslationKey }[] = [
+    { value: 'ALL',              labelKey: 'stu_all' },
+    { value: 'draft',            labelKey: 'ps_draft' },
+    { value: 'pending_approval', labelKey: 'ps_pending' },
+    { value: 'approved',         labelKey: 'ps_approved' },
+    { value: 'active',           labelKey: 'ps_active' },
+    { value: 'completed',        labelKey: 'ps_completed' },
+    { value: 'rejected',         labelKey: 'ps_rejected' },
+  ];
+
   const STATUS_ORDER: Record<string, number> = { pending_approval: 0, draft: 1, active: 2, approved: 3, completed: 4, rejected: 5 };
   const sortedPlans = [...plans].sort((a, b) => (STATUS_ORDER[a.status] ?? 9) - (STATUS_ORDER[b.status] ?? 9));
+  const filteredSortedPlans = sortedPlans.filter((p) =>
+    (listStatus === 'ALL' || p.status === listStatus) &&
+    p.student_name.includes(listSearch)
+  );
 
   return (
     <AppShellB breadcrumbs={[{ label: t('nav_learningPlans') }]}>
@@ -71,6 +89,31 @@ export default function LearningPlansBPage() {
             <Plus className="w-4 h-4" />
             {t('lp_newPlanShort')}
           </button>
+        </div>
+
+        {/* Filter bar */}
+        <div className="flex items-center gap-3 flex-wrap">
+          <div className="relative">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+            <input
+              type="text"
+              placeholder={t('lp_search')}
+              value={listSearch}
+              onChange={(e) => setListSearch(e.target.value)}
+              className="pl-9 pr-4 py-2 text-sm border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-sky-300 bg-white w-52"
+            />
+          </div>
+          <div className="flex items-center gap-1 flex-wrap">
+            {PLAN_STATUS_FILTER.map(({ value, labelKey }) => (
+              <button
+                key={value}
+                onClick={() => setListStatus(value)}
+                className={cn('px-2.5 py-1 rounded-lg text-xs font-semibold transition-colors', listStatus === value ? 'bg-sky-600 text-white' : 'text-gray-500 hover:bg-gray-100')}
+              >
+                {t(labelKey)}
+              </button>
+            ))}
+          </div>
         </div>
 
         {/* New plan builder panel */}
@@ -146,7 +189,7 @@ export default function LearningPlansBPage() {
               <span className="col-span-1">{t('lp_startDate')}</span>
               <span className="col-span-1 text-right">{t('lp_detail')}</span>
             </div>
-            {sortedPlans.map((plan) => (
+            {filteredSortedPlans.map((plan) => (
               <div key={plan.id} className="border-b border-gray-50 last:border-0">
                 <div
                   onClick={() => handleExpandPlan(plan)}

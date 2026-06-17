@@ -9,7 +9,7 @@ import { GroupBadge } from '@/components/shared/GroupBadge';
 import { VPProgressBar } from '@/components/shared/VPProgressBar';
 import { PlanStatusBadge } from '@/components/shared/StatusBadge';
 import { getStudents, getLearningPlans } from '@/lib/mock/api';
-import { useLanguage } from '@/lib/i18n';
+import { useLanguage, TranslationKey } from '@/lib/i18n';
 import type { Student, LearningPlan } from '@/lib/types';
 
 const GROUP_CODES = ['HN', 'AC', 'RS', 'ST'] as const;
@@ -20,6 +20,7 @@ export default function StudentsAPage() {
   const [plans, setPlans] = useState<LearningPlan[]>([]);
   const [search, setSearch] = useState('');
   const [groupFilter, setGroupFilter] = useState<string>('ALL');
+  const [statusFilter, setStatusFilter] = useState<'ALL' | 'active' | 'inactive' | 'graduated'>('ALL');
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -30,10 +31,18 @@ export default function StudentsAPage() {
     });
   }, []);
 
+  const STATUS_FILTER_ITEMS: { value: 'ALL' | 'active' | 'inactive' | 'graduated'; labelKey: TranslationKey }[] = [
+    { value: 'ALL',       labelKey: 'stu_all' },
+    { value: 'active',    labelKey: 'sf_active' },
+    { value: 'inactive',  labelKey: 'sf_inactive' },
+    { value: 'graduated', labelKey: 'sf_graduated' },
+  ];
+
   const filtered = students.filter((s) => {
     const matchSearch = s.name.includes(search);
-    const matchGroup = groupFilter === 'ALL' || s.group === groupFilter;
-    return matchSearch && matchGroup;
+    const matchGroup  = groupFilter === 'ALL' || s.group === groupFilter;
+    const matchStatus = statusFilter === 'ALL' || s.status === statusFilter;
+    return matchSearch && matchGroup && matchStatus;
   });
 
   return (
@@ -45,7 +54,7 @@ export default function StudentsAPage() {
         </div>
 
         {/* Filters */}
-        <div className="flex items-center gap-3 mb-5">
+        <div className="flex items-center gap-3 mb-2">
           <div className="flex-1 relative">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
             <input
@@ -77,6 +86,20 @@ export default function StudentsAPage() {
               </button>
             ))}
           </div>
+        </div>
+        {/* Status filter */}
+        <div className="flex items-center gap-1.5 mb-5 bg-white border border-slate-200 rounded-xl p-1 w-fit">
+          {STATUS_FILTER_ITEMS.map(({ value, labelKey }) => (
+            <button
+              key={value}
+              onClick={() => setStatusFilter(value)}
+              className={`px-3 py-1 rounded-lg text-xs font-semibold transition-colors ${
+                statusFilter === value ? 'bg-indigo-600 text-white' : 'text-slate-500 hover:bg-slate-100'
+              }`}
+            >
+              {t(labelKey)}
+            </button>
+          ))}
         </div>
 
         {loading ? (

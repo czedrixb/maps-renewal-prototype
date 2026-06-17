@@ -89,6 +89,7 @@ export const STUDENTS: Student[] = [
   { id: 4, name: '최지아', group: 'ST', teacher_id: 101, teacher_name: '이지현', academy_id: 10, status: 'active', phone: '010-4567-8901', parent_phone: '010-6543-2109', enrolled_at: '2026-04-01', birth_date: '2010-12-03' },
   { id: 5, name: '정하준', group: 'HN', teacher_id: 102, teacher_name: '박준서', academy_id: 10, status: 'active', phone: '010-5678-9012', parent_phone: '010-5432-1098', enrolled_at: '2026-02-01', birth_date: '2011-04-19' },
   { id: 6, name: '한수아', group: 'AC', teacher_id: 102, teacher_name: '박준서', academy_id: 10, status: 'inactive', phone: '010-6789-0123', parent_phone: '010-4321-0987', enrolled_at: '2025-11-01', birth_date: '2010-06-30' },
+  { id: 7, name: '오세준', group: 'RS', teacher_id: 101, teacher_name: '이지현', academy_id: 10, status: 'graduated', phone: '010-7890-1234', parent_phone: '010-3210-9876', enrolled_at: '2025-03-01', birth_date: '2009-11-12' },
 ];
 
 // ─── Learning Plans ───────────────────────────────────────────────────────────
