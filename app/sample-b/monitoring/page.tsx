@@ -2,19 +2,28 @@
 
 import { useEffect, useState, Suspense } from 'react';
 import { useSearchParams, useRouter } from 'next/navigation';
-import { Search, TrendingUp, ChevronDown, ChevronUp } from 'lucide-react';
+import { Search, TrendingUp, ChevronDown, ChevronUp, Heart } from 'lucide-react';
 
 import { AppShellB } from '@/components/sample-b/AppShellB';
 import { GroupBadge } from '@/components/shared/GroupBadge';
 import { ReportStatusBadge, MakeupStatusBadge } from '@/components/shared/StatusBadge';
 import { ReportStatusStepper } from '@/components/shared/ReportStatusStepper';
 import { VPProgressBar } from '@/components/shared/VPProgressBar';
-import { getTestScores, getMakeupSessions, getMonthlyReports } from '@/lib/mock/api';
+import { getTestScores, getMakeupSessions, getMonthlyReports, getAttitudeEvaluations } from '@/lib/mock/api';
 import { cn, formatYearMonth } from '@/lib/utils';
+import { getGradeColor } from '@/lib/vp';
 import { useLanguage, TranslationKey } from '@/lib/i18n';
-import type { TestScore, MakeupSession, MonthlyReport } from '@/lib/types';
+import type { TestScore, MakeupSession, MonthlyReport, AttitudeEvaluation } from '@/lib/types';
 
-type TabId = 'scores' | 'makeup' | 'reports';
+type TabId = 'scores' | 'attitude' | 'makeup' | 'reports';
+
+const AC_KEYS: Record<string, TranslationKey> = {
+  participation: 'ac_participation',
+  homework:      'ac_homework',
+  attitude:      'ac_attitude',
+  effort:        'ac_effort',
+  improvement:   'ac_improvement',
+};
 
 function translateTestType(type: string, t: (key: TranslationKey) => string): string {
   if (type === '단원평가') return t('mon_typeUnit');
@@ -23,9 +32,10 @@ function translateTestType(type: string, t: (key: TranslationKey) => string): st
 }
 
 const TAB_KEYS: { id: TabId; key: TranslationKey }[] = [
-  { id: 'scores',  key: 'mon_scores' },
-  { id: 'makeup',  key: 'mon_makeup' },
-  { id: 'reports', key: 'mon_reports' },
+  { id: 'scores',   key: 'mon_scores' },
+  { id: 'attitude', key: 'mon_attitude' },
+  { id: 'makeup',   key: 'mon_makeup' },
+  { id: 'reports',  key: 'mon_reports' },
 ];
 
 function MonitoringContent() {
@@ -35,6 +45,7 @@ function MonitoringContent() {
   const tabParam = (searchParams.get('tab') ?? 'scores') as TabId;
 
   const [scores, setScores] = useState<TestScore[]>([]);
+  const [attitudes, setAttitudes] = useState<AttitudeEvaluation[]>([]);
   const [makeup, setMakeup] = useState<MakeupSession[]>([]);
   const [reports, setReports] = useState<MonthlyReport[]>([]);
   const [search, setSearch] = useState('');
@@ -42,10 +53,12 @@ function MonitoringContent() {
   const [makeupStatus, setMakeupStatus] = useState('ALL');
   const [loading, setLoading] = useState(true);
   const [expandedReport, setExpandedReport] = useState<number | null>(null);
+  const [expandedAttitude, setExpandedAttitude] = useState<number | null>(null);
 
   useEffect(() => {
-    Promise.all([getTestScores(), getMakeupSessions(), getMonthlyReports()]).then(([sc, mk, rp]) => {
+    Promise.all([getTestScores(), getAttitudeEvaluations(), getMakeupSessions(), getMonthlyReports()]).then(([sc, att, mk, rp]) => {
       setScores(sc);
+      setAttitudes(att);
       setMakeup(mk);
       setReports(rp);
       setLoading(false);
@@ -58,7 +71,11 @@ function MonitoringContent() {
     setTypeFilter('ALL');
   };
 
-  // Derived stats for the scores summary bar — computed from loaded data (not hardcoded)
+  // Derived stats — computed from loaded data (not hardcoded)
+  const attAvg = attitudes.length
+    ? Math.round(attitudes.reduce((sum, a) => sum + a.total, 0) / attitudes.length)
+    : 0;
+
   const PASS_RATIO = 0.8; // matches the VP "achieved" threshold in lib/vp.ts
   const classAvg = scores.length
     ? Math.round(scores.reduce((sum, s) => sum + (s.score / s.total) * 100, 0) / scores.length)
@@ -185,6 +202,89 @@ function MonitoringContent() {
                 </div>
               </div>
             </div>
+            )}
+
+            {/* ─── ATTITUDE ─── */}
+            {tabParam === 'attitude' && (
+              <div className="space-y-3">
+                {/* Summary bar */}
+                <div className="bg-white rounded-xl border border-gray-200 px-4 py-3 flex items-center gap-4">
+                  <Heart className="w-4 h-4 text-sky-600" />
+                  <span className="text-xs text-gray-600">
+                    {t('mon_total')} <span className="font-bold">{attitudes.filter((a) => !search || a.student_name.includes(search)).length}</span>{lang === 'ko' ? '건' : ''} · {t('mon_classAvg')} <span className="font-bold text-gray-800">{attAvg}{lang === 'ko' ? '점' : ' pts'}</span>
+                  </span>
+                </div>
+
+                <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
+                  {/* Header */}
+                  <div className="grid grid-cols-12 gap-2 px-4 py-2.5 bg-gray-50 text-xs font-semibold text-gray-500 border-b border-gray-100">
+                    <span className="col-span-4">{t('mon_student')}</span>
+                    <span className="col-span-3">{t('mon_period')}</span>
+                    <span className="col-span-2 text-center">{t('mon_score')}</span>
+                    <span className="col-span-2 text-center">{t('ov_grade')}</span>
+                    <span className="col-span-1 text-right">{t('lp_detail')}</span>
+                  </div>
+
+                  <div className="divide-y divide-gray-50">
+                    {attitudes
+                      .filter((a) => !search || a.student_name.includes(search))
+                      .map((att) => (
+                        <div key={att.id}>
+                          <div
+                            onClick={() => setExpandedAttitude(expandedAttitude === att.id ? null : att.id)}
+                            className={cn(
+                              'grid grid-cols-12 gap-2 px-4 py-3 items-center cursor-pointer hover:bg-gray-50 transition-colors',
+                              expandedAttitude === att.id && 'bg-sky-50'
+                            )}
+                          >
+                            <div className="col-span-4 flex items-center gap-2">
+                              <div className="w-7 h-7 rounded-lg bg-sky-100 text-sky-700 flex items-center justify-center text-xs font-bold shrink-0">{att.student_name[0]}</div>
+                              <span className="text-sm font-medium text-gray-800 truncate">{att.student_name}</span>
+                            </div>
+                            <span className="col-span-3 text-xs text-gray-600">{formatYearMonth(att.year, att.month, lang)}</span>
+                            <span className="col-span-2 text-xs font-bold text-gray-700 text-center">
+                              {att.total}<span className="font-normal text-gray-400">/100</span>
+                            </span>
+                            <span className={cn('col-span-2 text-xs font-black text-center', getGradeColor(att.grade))}>{att.grade}</span>
+                            <div className="col-span-1 text-right">
+                              <button
+                                onClick={(e) => { e.stopPropagation(); setExpandedAttitude(expandedAttitude === att.id ? null : att.id); }}
+                                className="p-1 text-gray-400 hover:text-sky-600 rounded"
+                              >
+                                {expandedAttitude === att.id ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
+                              </button>
+                            </div>
+                          </div>
+
+                          {expandedAttitude === att.id && (
+                            <div className="px-4 pb-4 pt-2 bg-sky-50 border-t border-sky-100 space-y-3">
+                              <div className="space-y-2">
+                                {Object.entries(att.categories).map(([key, val]) => (
+                                  <div key={key}>
+                                    <div className="flex justify-between text-xs text-gray-500 mb-1">
+                                      <span>{t(AC_KEYS[key] ?? 'ac_participation')}</span>
+                                      <span className="font-semibold">{val} / 20</span>
+                                    </div>
+                                    <VPProgressBar vp={val} max={20} size="sm" />
+                                  </div>
+                                ))}
+                              </div>
+                              {att.note && (
+                                <p className="text-xs text-gray-500 italic border-t border-sky-100 pt-2">{att.note}</p>
+                              )}
+                              <button
+                                onClick={(e) => { e.stopPropagation(); router.push(`/sample-b/students?select=${att.student_id}`); }}
+                                className="px-3 py-1.5 border border-sky-300 text-sky-700 rounded-lg text-xs font-semibold hover:bg-sky-100 transition-colors"
+                              >
+                                {t('mon_student')} →
+                              </button>
+                            </div>
+                          )}
+                        </div>
+                      ))}
+                  </div>
+                </div>
+              </div>
             )}
 
             {/* ─── MAKEUP ─── */}

@@ -1,72 +1,48 @@
 'use client';
 
-import { Suspense } from 'react';
 import Link from 'next/link';
-import { usePathname, useSearchParams } from 'next/navigation';
+import { usePathname } from 'next/navigation';
 import {
-  LayoutDashboard, Users, BookOpen, BarChart2, Bell, ChevronRight,
-  Calendar, FileText, LogOut,
+  LayoutDashboard, Users, BookOpen, BarChart2, Bell, ChevronRight, LogOut,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useLanguage, LanguageToggle, TranslationKey } from '@/lib/i18n';
 import { useProfile, initialOf } from '@/lib/profile';
 
-const NAV_SECTIONS: { titleKey?: TranslationKey; items: { icon: React.ElementType; key: TranslationKey; href: string }[] }[] = [
-  {
-    items: [
-      { icon: LayoutDashboard, key: 'nav_dashboard',      href: '/sample-b/dashboard' },
-      { icon: Users,           key: 'nav_studentsManage',  href: '/sample-b/students' },
-      { icon: BookOpen,        key: 'nav_learningPlans',   href: '/sample-b/learning-plans' },
-    ],
-  },
-  {
-    titleKey: 'nav_monitoring',
-    items: [
-      { icon: BarChart2, key: 'nav_testScores',     href: '/sample-b/monitoring?tab=scores' },
-      { icon: Calendar,  key: 'nav_makeup',          href: '/sample-b/monitoring?tab=makeup' },
-      { icon: FileText,  key: 'nav_monthlyReports',  href: '/sample-b/monitoring?tab=reports' },
-    ],
-  },
+const NAV_ITEMS: { icon: React.ElementType; key: TranslationKey; href: string }[] = [
+  { icon: LayoutDashboard, key: 'nav_dashboard',     href: '/sample-b/dashboard' },
+  { icon: Users,           key: 'nav_studentsManage', href: '/sample-b/students' },
+  { icon: BookOpen,        key: 'nav_learningPlans',  href: '/sample-b/learning-plans' },
+  { icon: BarChart2,       key: 'nav_monitoring',     href: '/sample-b/monitoring' },
 ];
 
 function SidebarNav() {
   const pathname = usePathname();
-  const searchParams = useSearchParams();
-  const currentTab = searchParams.get('tab');
   const { t } = useLanguage();
 
   return (
-    <nav className="flex-1 overflow-y-auto py-3 px-2 space-y-4">
-      {NAV_SECTIONS.map((section, si) => (
-        <div key={si}>
-          {section.titleKey && (
-            <p className="text-[10px] font-semibold text-slate-500 uppercase tracking-wider px-3 mb-1">{t(section.titleKey)}</p>
-          )}
-          {section.items.map(({ icon: Icon, key, href }) => {
-            const label = t(key);
-            const [hrefPath, hrefQuery] = href.split('?');
-            const hrefTab = hrefQuery ? new URLSearchParams(hrefQuery).get('tab') : null;
-            const active = hrefTab
-              ? pathname === hrefPath && (currentTab ?? 'scores') === hrefTab
-              : pathname === href || (pathname.startsWith(href) && href !== '/sample-b/dashboard');
-            return (
-              <Link
-                key={href}
-                href={href}
-                className={cn(
-                  'flex items-center gap-3 px-3 py-2 rounded-xl text-sm font-medium transition-colors',
-                  active
-                    ? 'bg-sky-600 text-white'
-                    : 'text-slate-300 hover:bg-slate-700 hover:text-slate-100'
-                )}
-              >
-                <Icon className="w-4 h-4 shrink-0" strokeWidth={active ? 2.5 : 2} />
-                {label}
-              </Link>
-            );
-          })}
-        </div>
-      ))}
+    <nav className="flex-1 overflow-y-auto py-3 px-2 space-y-1">
+      {NAV_ITEMS.map(({ icon: Icon, key, href }) => {
+        const label = t(key);
+        const active = href === '/sample-b/dashboard'
+          ? pathname === href
+          : pathname.startsWith(href);
+        return (
+          <Link
+            key={href}
+            href={href}
+            className={cn(
+              'flex items-center gap-3 px-3 py-2 rounded-xl text-sm font-medium transition-colors',
+              active
+                ? 'bg-sky-600 text-white'
+                : 'text-slate-300 hover:bg-slate-700 hover:text-slate-100'
+            )}
+          >
+            <Icon className="w-4 h-4 shrink-0" strokeWidth={active ? 2.5 : 2} />
+            {label}
+          </Link>
+        );
+      })}
     </nav>
   );
 }
@@ -95,10 +71,7 @@ export function AppShellB({ children, breadcrumbs }: AppShellBProps) {
           </div>
         </div>
 
-        {/* Nav — wrapped in Suspense so useSearchParams is safe for static prerendering */}
-        <Suspense fallback={<div className="flex-1" />}>
-          <SidebarNav />
-        </Suspense>
+        <SidebarNav />
 
         {/* Bottom */}
         <div className="px-2 py-3 border-t border-slate-700 space-y-1">

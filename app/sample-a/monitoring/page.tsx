@@ -1,19 +1,28 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { BarChart2, Calendar, FileText, Search, TrendingUp } from 'lucide-react';
+import { BarChart2, Calendar, FileText, Heart, Search, TrendingUp } from 'lucide-react';
 import Link from 'next/link';
 import { AppShellA } from '@/components/sample-a/AppShellA';
 import { GroupBadge } from '@/components/shared/GroupBadge';
 import { ReportStatusBadge, MakeupStatusBadge } from '@/components/shared/StatusBadge';
 import { ReportStatusStepper } from '@/components/shared/ReportStatusStepper';
 import { VPProgressBar } from '@/components/shared/VPProgressBar';
-import { getTestScores, getMakeupSessions, getMonthlyReports } from '@/lib/mock/api';
+import { getTestScores, getMakeupSessions, getMonthlyReports, getAttitudeEvaluations } from '@/lib/mock/api';
 import { cn, formatYearMonth } from '@/lib/utils';
+import { getGradeColor } from '@/lib/vp';
 import { useLanguage, TranslationKey } from '@/lib/i18n';
-import type { TestScore, MakeupSession, MonthlyReport } from '@/lib/types';
+import type { TestScore, MakeupSession, MonthlyReport, AttitudeEvaluation } from '@/lib/types';
 
-type TabId = 'scores' | 'makeup' | 'reports';
+type TabId = 'scores' | 'attitude' | 'makeup' | 'reports';
+
+const AC_KEYS: Record<string, TranslationKey> = {
+  participation: 'ac_participation',
+  homework:      'ac_homework',
+  attitude:      'ac_attitude',
+  effort:        'ac_effort',
+  improvement:   'ac_improvement',
+};
 
 function translateTestType(type: string, t: (key: TranslationKey) => string): string {
   if (type === '단원평가') return t('mon_typeUnit');
@@ -22,15 +31,17 @@ function translateTestType(type: string, t: (key: TranslationKey) => string): st
 }
 
 const TABS: { id: TabId; key: TranslationKey; icon: React.ElementType }[] = [
-  { id: 'scores',  key: 'mon_scores',  icon: BarChart2 },
-  { id: 'makeup',  key: 'mon_makeup',  icon: Calendar },
-  { id: 'reports', key: 'mon_reports', icon: FileText },
+  { id: 'scores',   key: 'mon_scores',   icon: BarChart2 },
+  { id: 'attitude', key: 'mon_attitude', icon: Heart },
+  { id: 'makeup',   key: 'mon_makeup',   icon: Calendar },
+  { id: 'reports',  key: 'mon_reports',  icon: FileText },
 ];
 
 export default function MonitoringAPage() {
   const { lang, t } = useLanguage();
   const [activeTab, setActiveTab] = useState<TabId>('scores');
   const [scores, setScores] = useState<TestScore[]>([]);
+  const [attitudes, setAttitudes] = useState<AttitudeEvaluation[]>([]);
   const [makeup, setMakeup] = useState<MakeupSession[]>([]);
   const [reports, setReports] = useState<MonthlyReport[]>([]);
   const [search, setSearch] = useState('');
@@ -39,8 +50,9 @@ export default function MonitoringAPage() {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    Promise.all([getTestScores(), getMakeupSessions(), getMonthlyReports()]).then(([sc, mk, rp]) => {
+    Promise.all([getTestScores(), getAttitudeEvaluations(), getMakeupSessions(), getMonthlyReports()]).then(([sc, att, mk, rp]) => {
       setScores(sc);
+      setAttitudes(att);
       setMakeup(mk);
       setReports(rp);
       setLoading(false);
@@ -149,6 +161,49 @@ export default function MonitoringAPage() {
                       </div>
                     </Link>
                   ))}
+              </div>
+            )}
+
+            {/* ─── ATTITUDE ─── */}
+            {activeTab === 'attitude' && (
+              <div className="space-y-3">
+                {attitudes.filter((a) => !search || a.student_name.includes(search)).length === 0 ? (
+                  <p className="text-sm text-slate-400 text-center py-10">{t('att_empty')}</p>
+                ) : (
+                  attitudes
+                    .filter((a) => !search || a.student_name.includes(search))
+                    .map((att) => (
+                      <Link key={att.id} href={`/sample-a/students/${att.student_id}`} className="bg-white border border-slate-200 rounded-xl p-4 hover:border-indigo-300 hover:shadow-sm transition-all block">
+                        <div className="flex items-center justify-between mb-4">
+                          <div className="flex items-center gap-3">
+                            <div className="w-10 h-10 rounded-xl bg-indigo-50 text-indigo-700 flex items-center justify-center text-sm font-bold shrink-0">
+                              {att.student_name[0]}
+                            </div>
+                            <div>
+                              <p className="text-sm font-semibold text-slate-800">{att.student_name}</p>
+                              <p className="text-xs text-slate-400">{formatYearMonth(att.year, att.month, lang)}</p>
+                            </div>
+                          </div>
+                          <div className="flex items-center gap-2">
+                            <span className={cn('text-2xl font-black', getGradeColor(att.grade))}>{att.grade}</span>
+                            <span className="text-lg font-bold text-slate-700">{att.total}<span className="text-sm font-normal text-slate-400">/100</span></span>
+                          </div>
+                        </div>
+                        <div className="space-y-2">
+                          {Object.entries(att.categories).map(([key, val]) => (
+                            <div key={key}>
+                              <div className="flex justify-between text-xs text-slate-500 mb-1">
+                                <span>{t(AC_KEYS[key] ?? 'ac_participation')}</span>
+                                <span className="font-semibold">{val} / 20</span>
+                              </div>
+                              <VPProgressBar vp={val} max={20} size="sm" />
+                            </div>
+                          ))}
+                        </div>
+                        {att.note && <p className="text-xs text-slate-500 mt-3 italic border-t border-slate-100 pt-3">{att.note}</p>}
+                      </Link>
+                    ))
+                )}
               </div>
             )}
 
